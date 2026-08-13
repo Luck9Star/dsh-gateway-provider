@@ -122,7 +122,8 @@ async function testCatalog() {
   const mm3Resolved = await adapter.resolveModel(PROVIDER, "MiniMax-M3");
   check("MiniMax-M3 contextWindow from models.dev", mm3Resolved.context?.contextWindow === 512_000, `context=${mm3Resolved.context?.contextWindow}`);
   check("MiniMax-M3 maxTokens from models.dev", mm3Resolved.defaultMaxTokens === 128_000, `maxTokens=${mm3Resolved.defaultMaxTokens}`);
-  check("MiniMax-M3 keeps provider-native reasoning (no harness efforts)", mm3Resolved.reasoning === undefined);
+  check("MiniMax-M3 exposes reasoning efforts (adaptive mapping)", mm3Resolved.reasoning?.efforts?.length === 3, JSON.stringify(mm3Resolved.reasoning?.efforts?.map((e) => e.id)));
+  check("claude model keeps provider-native reasoning", (await adapter.resolveModel(PROVIDER, "claude-opus-4-8")).reasoning === undefined);
   const unknown = await adapter.resolveModel(PROVIDER, "not-a-real-model-xyz");
   check("unlisted model resolves with configured defaults", unknown.context?.contextWindow === 128000, `context=${unknown.context?.contextWindow}`);
 }
@@ -215,6 +216,29 @@ async function testGeminiWire() {
   check("gemini usage", s.usage?.inputTokens !== undefined, JSON.stringify(s.usage));
 }
 
+async function testMiniMaxReasoning() {
+  console.log("\n--- MiniMax reasoning-effort wire mapping ---");
+  const adapter = makeAdapter();
+  // off → thinking disabled: the reply should NOT wrap in <think>.
+  const off = await collectStream(adapter, {
+    model: "MiniMax-M3",
+    reasoningEffort: "off",
+    messages: [{ role: "user", content: [{ type: "text", text: "Reply with exactly: NO THINK" }] }],
+    maxTokens: 64,
+  });
+  const offText = summarize(off).text;
+  check("MiniMax off: thinking disabled (no <think>)", !offText.includes("<think>"), JSON.stringify(offText.slice(0, 60)));
+  // high → thinking adaptive: the reply wraps in <think>.
+  const high = await collectStream(adapter, {
+    model: "MiniMax-M3",
+    reasoningEffort: "high",
+    messages: [{ role: "user", content: [{ type: "text", text: "Reply with exactly: THINK ON" }] }],
+    maxTokens: 128,
+  });
+  const highText = summarize(high).text;
+  check("MiniMax high: thinking adaptive (<think> present)", highText.includes("<think>"), JSON.stringify(highText.slice(0, 60)));
+}
+
 async function main() {
   const only = process.argv.findIndex((a) => a === "--only");
   const onlyName = only !== -1 ? process.argv[only + 1] : undefined;
@@ -222,6 +246,7 @@ async function main() {
     catalog: testCatalog,
     "openai-deepseek": () => testOpenAIChat("deepseek-v4-flash", "deepseek-v4-flash"),
     "openai-minimax": () => testOpenAIChat("MiniMax-M3", "MiniMax-M3"),
+    "minimax-reasoning": testMiniMaxReasoning,
     tools: testToolCall,
     anthropic: testAnthropicWire,
     gemini: testGeminiWire,

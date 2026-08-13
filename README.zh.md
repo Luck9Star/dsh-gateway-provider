@@ -17,11 +17,10 @@
    - `openai` → `POST {base}/v1/chat/completions`
    - `anthropic` → `POST {base}/v1/messages`
    - `gemini` → `POST {base}/v1beta/models/{model}:streamGenerateContent?alt=sse`
-4. **推理控制** — 仅 DeepSeek 系模型（models.dev `family` 或 id 前缀）透传
-   `thinking` / `reasoning_effort`；其余推理模型（如 MiniMax-M3）保持网关原生
-   默认行为（MiniMax 把思考放进 `<think>` 内容，且拒绝 `thinking: enabled`）。
-5. **自动化治理** — 模型列表按 TTL 缓存、惰性刷新；image/speech/embedding 等
-   非对话模型默认从选择器剔除（`excludePatterns`）；HTTP 错误统一映射
+4. **推理控制** — 推理等级选择器按模型家族接线：
+   - **DeepSeek 系** → `thinking: {type: enabled|disabled}` + `reasoning_effort`（Off / High / Max）；
+   - **MiniMax 系** → `thinking: {type: adaptive|disabled}`（MiniMax 拒绝 `enabled`；Off 关闭思考，High/Max 用原生 adaptive）；
+   - 其余模型保持网关原生默认（如 Claude/Gemini）。
    （AUTH / RATE_LIMIT / QUOTA_EXCEEDED / CONTEXT_WINDOW_EXCEEDED / SERVER /
    TRANSPORT…），支持 `retry-after` 与 `x-request-id`，流空闲看门狗防挂死。
 
@@ -86,6 +85,29 @@ web profile 的用户补丁层支持 HMR，本地检出可直接热挂载：
    ```
 
    修改插件源码后，给 `name` 追加查询串（如 `index.js?v=3`）强制重新 import。
+
+## Web 配置（模型设置页）
+
+官方 **设置 → 模型** 编辑页只认识自带的 `llm-deepseek` 与 `llm-pi-ai` 命名空间；
+第三方 provider 的命名空间只会渲染提示且禁用保存。本包附带一个小补丁，让
+Models 页对 `llm-newapi` 使用 deepseek 编辑布局（API 密钥 + API 地址 + 模型目录）：
+
+```bash
+node scripts/patch-web-ui.mjs apply     # 给 profile bundle 打补丁（幂等）
+node scripts/patch-web-ui.mjs verify    # 检查状态
+node scripts/patch-web-ui.mjs restore   # 还原
+```
+
+执行 `apply` 后刷新浏览器：**设置 → 模型 → 编辑 NewAPI** 出现 API 密钥输入框，
+"自定义设置"里有 API 地址——保存即写入 `$DSH_HOME/settings.yaml` 的 `llm-newapi:`
+节（热加载）与凭据库。
+
+> ⚠️ DeepSeek Harness 升级会重装 bundle 并丢掉补丁——升级后重跑
+> `node scripts/patch-web-ui.mjs apply`。该补丁只改你本机 profile 安装，
+> 发布的插件包本身是未经修改的上游代码。
+
+其余高级参数（`catalogMode`、`endpointPriority`、`excludePatterns` 等）在
+`$DSH_HOME/settings.yaml` 的 `llm-newapi:` 节中编辑。
 
 ## 配置（`$DSH_HOME/settings.yaml` 的 `llm-newapi:` 节）
 

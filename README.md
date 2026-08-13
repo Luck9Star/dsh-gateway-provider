@@ -21,11 +21,13 @@ discovered and driven automatically:
    - `openai` → `POST {base}/v1/chat/completions`
    - `anthropic` → `POST {base}/v1/messages`
    - `gemini` → `POST {base}/v1beta/models/{model}:streamGenerateContent?alt=sse`
-4. **Reasoning control** — `thinking` / `reasoning_effort` wire fields are only
-   forwarded for DeepSeek-family models (models.dev `family` or id prefix);
-   other reasoning models (e.g. MiniMax-M3) keep their gateway-native default
-   behavior (MiniMax puts reasoning into `<think>` content and rejects
-   `thinking: enabled`).
+4. **Reasoning control** — the harness reasoning-level selector is wired per
+   model family:
+   - **DeepSeek family** → `thinking: {type: enabled|disabled}` +
+     `reasoning_effort` (Off / High / Max);
+   - **MiniMax family** → `thinking: {type: adaptive|disabled}` (MiniMax
+     rejects `enabled`; Off disables thinking, High/Max use native adaptive);
+   - everything else keeps the gateway-native default (e.g. Claude/Gemini).
 5. **Operational hygiene** — model list is TTL-cached and lazily refreshed;
    non-chat models (image / speech / embedding / rerank / …) are excluded from
    the picker by default (`excludePatterns`); HTTP errors are mapped to stable
@@ -100,6 +102,33 @@ mounted live:
 
    After editing plugin sources, bump a query string on `name`
    (e.g. `index.js?v=3`) to force a fresh module import.
+
+## Web configuration (Models page)
+
+The official **Settings → Models** editor only knows the shipped `llm-deepseek`
+and `llm-pi-ai` namespaces; a third-party provider namespace renders as a hint
+with saving disabled. This package ships a small patch that teaches the Models
+page the deepseek editor layout (API key + base URL + model catalog) for
+`llm-newapi`:
+
+```bash
+node scripts/patch-web-ui.mjs apply     # patch the profile bundle (idempotent)
+node scripts/patch-web-ui.mjs verify    # check state
+node scripts/patch-web-ui.mjs restore   # revert
+```
+
+After `apply`, reload the browser: **Settings → Models → Edit NewAPI** shows the
+API key field and (under 自定义设置) the base URL — saving writes
+`llm-newapi:` to `$DSH_HOME/settings.yaml` (hot-reloaded) and the key to the
+credential store.
+
+> ⚠️ A DeepSeek Harness upgrade reinstalls the bundle and drops the patch —
+> re-run `node scripts/patch-web-ui.mjs apply` after upgrading. This patch only
+> touches your local profile installation; the published package itself is
+> unmodified upstream code.
+
+All other settings (`catalogMode`, `endpointPriority`, `excludePatterns`, …)
+are edited in the `llm-newapi:` section of `$DSH_HOME/settings.yaml`.
 
 ## Configuration (`llm-newapi:` section of `$DSH_HOME/settings.yaml`)
 
