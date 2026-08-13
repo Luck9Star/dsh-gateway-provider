@@ -28,9 +28,11 @@ for (const file of FILES) {
   if (!existsSync(file)) continue;
   const source = readFileSync(file, "utf8");
   const next = source.replace(RE, (match, prefix, q, spec, q2) => {
-    if (spec.includes("?v=")) return match;
+    // Always rewrite the version mark (a fresh mark busts the Node module
+    // cache for every file in the graph, including previously versioned ones).
+    const clean = spec.replace(/\?v=\d+/, "");
     changed += 1;
-    return `${prefix}${q}${spec}?v=${mark}${q2}`;
+    return `${prefix}${q}${clean}?v=${mark}${q2}`;
   });
   if (next !== source) writeFileSync(file, next);
 }

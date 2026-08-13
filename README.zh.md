@@ -17,10 +17,19 @@
    - `openai` → `POST {base}/v1/chat/completions`
    - `anthropic` → `POST {base}/v1/messages`
    - `gemini` → `POST {base}/v1beta/models/{model}:streamGenerateContent?alt=sse`
-4. **推理控制** — 推理等级选择器按模型家族接线：
-   - **DeepSeek 系** → `thinking: {type: enabled|disabled}` + `reasoning_effort`（Off / High / Max）；
-   - **MiniMax 系** → `thinking: {type: adaptive|disabled}`（MiniMax 拒绝 `enabled`；Off 关闭思考，High/Max 用原生 adaptive）；
-   - 其余模型保持网关原生默认（如 Claude/Gemini）。
+4. **推理等级自动推断与映射** — 推理等级选择器由 models.dev（`reasoning: true`）
+   自动推断，并按模型家族 × wire 格式映射：
+   - **DeepSeek 系**（OpenAI 路由）→ `thinking: {type: enabled|disabled}` +
+     `reasoning_effort`（Off / High / Max）；
+   - **MiniMax 系**（OpenAI 路由）→ `thinking: {type: adaptive|disabled}`
+     （MiniMax 拒绝 `enabled`；Off 关闭思考，High/Max 用原生 adaptive）；
+   - **其余推理模型**（GPT / GLM / Kimi / Gemini / Claude 等）→ OpenAI 路由发
+     OpenAI 风格 `reasoning_effort: low|medium|high`；Messages 路由发 Anthropic
+     `thinking` + `budget_tokens`；generateContent 路由发
+     `thinkingConfig.thinkingBudget`。`off` 一律表示"保持提供方原生默认"。
+   未声明 `reasoning: true` 的模型保持提供方原生默认，不显示推理等级。
+5. **自动化治理** — 模型列表按 TTL 缓存、惰性刷新；image/speech/embedding 等
+   非对话模型默认从选择器剔除（`excludePatterns`）；HTTP 错误统一映射
    （AUTH / RATE_LIMIT / QUOTA_EXCEEDED / CONTEXT_WINDOW_EXCEEDED / SERVER /
    TRANSPORT…），支持 `retry-after` 与 `x-request-id`，流空闲看门狗防挂死。
 

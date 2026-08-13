@@ -21,13 +21,20 @@ discovered and driven automatically:
    - `openai` → `POST {base}/v1/chat/completions`
    - `anthropic` → `POST {base}/v1/messages`
    - `gemini` → `POST {base}/v1beta/models/{model}:streamGenerateContent?alt=sse`
-4. **Reasoning control** — the harness reasoning-level selector is wired per
-   model family:
-   - **DeepSeek family** → `thinking: {type: enabled|disabled}` +
-     `reasoning_effort` (Off / High / Max);
-   - **MiniMax family** → `thinking: {type: adaptive|disabled}` (MiniMax
-     rejects `enabled`; Off disables thinking, High/Max use native adaptive);
-   - everything else keeps the gateway-native default (e.g. Claude/Gemini).
+4. **Automatic reasoning control** — the harness reasoning-level selector is
+   inferred from models.dev (`reasoning: true`) and mapped per model family ×
+   wire format:
+   - **DeepSeek family** (OpenAI route) → `thinking: {type: enabled|disabled}`
+     + `reasoning_effort` (Off / High / Max);
+   - **MiniMax family** (OpenAI route) → `thinking: {type: adaptive|disabled}`
+     (MiniMax rejects `enabled`; Off disables thinking, High/Max use adaptive);
+   - **all other reasoning models** (GPT / GLM / Kimi / Gemini / Claude / …) →
+     OpenAI-style `reasoning_effort: low|medium|high` on the OpenAI route,
+     Anthropic `thinking` + `budget_tokens` on the Messages route, and Gemini
+     `thinkingConfig.thinkingBudget` on the generateContent route. `off` always
+     means "keep the provider-native default".
+   Models without `reasoning: true` keep provider-native defaults and expose no
+   selector.
 5. **Operational hygiene** — model list is TTL-cached and lazily refreshed;
    non-chat models (image / speech / embedding / rerank / …) are excluded from
    the picker by default (`excludePatterns`); HTTP errors are mapped to stable
