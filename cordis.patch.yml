@@ -1,0 +1,10 @@
+# dsh-newapi-provider bundle patch: inserts the plugin row into the profile
+# roster. Applied as a profile bundle layer (the `dsh.bundle.patch` manifest
+# field) over dsh-base; activate with
+#   dsh plugin --profile <name> add dsh-newapi-provider
+#
+# The row is a bare plugin by package name: the host half (exports ".") runs
+# in the DSH process and registers the `newapi` provider route on ctx.llm.
+- insert:
+    - id: llm-newapi
+      name: 'dsh-newapi-provider'

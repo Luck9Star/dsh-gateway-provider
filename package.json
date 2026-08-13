@@ -1,0 +1,52 @@
+{
+  "name": "dsh-newapi-provider",
+  "version": "0.1.0",
+  "description": "NewAPI (new-api gateway) model provider for the DeepSeek Harness LLM seam: auto-discovers the gateway model list, enriches every model with models.dev parameters (context window / output cap / reasoning), and auto-constructs the per-model request endpoint (OpenAI / Anthropic / Gemini wire formats)",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "link": "bash scripts/link.sh",
+    "smoke": "node test/smoke.mjs"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "cordis",
+    "llm",
+    "llm-provider",
+    "provider",
+    "newapi",
+    "new-api",
+    "openai",
+    "anthropic",
+    "gemini",
+    "models.dev",
+    "dsh-plugin"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-anonymous-user-id": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-credentials": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-launch-environment": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-llm": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-settings": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-timeout": "^0.1.0-rc.6",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  }
+}
