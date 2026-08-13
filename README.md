@@ -69,7 +69,7 @@ Then:
    (0600; the web Models page writes it too; hot-reloaded):
 
    ```yaml
-   NEWAPI_API_KEY: sk-your-gateway-key
+   NEWAPI_API_KEY: sk-REPLACE_WITH_YOUR_KEY
    ```
 
    Or export `NEWAPI_API_KEY` in the launching environment.

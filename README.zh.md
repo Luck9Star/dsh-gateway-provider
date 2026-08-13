@@ -59,7 +59,7 @@ dsh plugin --profile web add dsh-newapi-provider
    热加载）写入网关 key：
 
    ```yaml
-   NEWAPI_API_KEY: sk-你的网关key
+   NEWAPI_API_KEY: sk-REPLACE_WITH_YOUR_KEY
    ```
 
    或在启动环境中导出 `NEWAPI_API_KEY`。
