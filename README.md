@@ -1,4 +1,4 @@
-# dsh-newapi-provider
+# dsh-gateway-provider
 
 > 中文文档：[README.zh.md](README.zh.md)
 
@@ -85,7 +85,7 @@ full paths).
 ## Layout
 
 ```
-dsh-newapi-provider/
+dsh-gateway-provider/
 ├── index.js            # plugin entry: multi-gateway Config, provider registration, settings/credentials
 ├── cordis.patch.yml    # dsh.bundle patch (auto-mounts via `dsh plugin add` or link dependency)
 ├── lib/
@@ -109,7 +109,7 @@ stack the standard way:
 
 ```bash
 # from anywhere: installs into the profile and activates the bundle patch
-dsh plugin --profile web add dsh-newapi-provider
+dsh plugin --profile web add dsh-gateway-provider
 ```
 
 The `dsh.bundle.patch` field in `package.json` points to `cordis.patch.yml`,
@@ -150,8 +150,8 @@ only need to register the dependency.
    ```bash
    cd "$DSH_HOME/profiles/web"
    # add to package.json dependencies:
-   #   "dsh-newapi-provider": "link:/absolute/path/to/dsh-newapi-provider"
-   # then add "dsh-newapi-provider" to the bundles list in the same file
+   #   "dsh-gateway-provider": "link:/absolute/path/to/dsh-gateway-provider"
+   # then add "dsh-gateway-provider" to the bundles list in the same file
    pnpm install
    ```
 
@@ -245,7 +245,7 @@ llm-newapi:
 ## Testing
 
 ```bash
-cd dsh-newapi-provider
+cd dsh-gateway-provider
 node test/smoke.mjs            # all: catalog / openai × 2 / tool calling / anthropic / gemini / custom-urls
 node test/smoke.mjs --only custom-urls
 node test/protocol-urls.mjs    # offline: URL derivation + gateway resolution units

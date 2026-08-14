@@ -24,7 +24,7 @@
  * picker), override its context/maxTokens/reasoning, force a protocol, or add a
  * custom model the gateway does not advertise.
  *
- * @module dsh-newapi-provider
+ * @module dsh-gateway-provider
  */
 
 import z from "@deepseek-ai/schemastery";

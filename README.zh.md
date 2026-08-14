@@ -1,4 +1,4 @@
-# dsh-newapi-provider
+# dsh-gateway-provider
 
 > English: [README.md](README.md)
 
@@ -71,7 +71,7 @@ baseURL 保持不变（那些 SDK 自行构建完整路径）。
 ## 目录结构
 
 ```
-dsh-newapi-provider/
+dsh-gateway-provider/
 ├── index.js            # 插件入口：多网关 Config 校验、provider 注册、设置/凭据接线
 ├── cordis.patch.yml    # dsh.bundle 补丁（经 `dsh plugin add` 或 link 依赖自动挂载）
 ├── lib/
@@ -93,7 +93,7 @@ dsh-newapi-provider/
 包已声明 `dsh.bundle` manifest，按标准流程加入 profile 层栈：
 
 ```bash
-dsh plugin --profile web add dsh-newapi-provider
+dsh plugin --profile web add dsh-gateway-provider
 ```
 
 `package.json` 的 `dsh.bundle.patch` 字段指向 `cordis.patch.yml`，后者在
@@ -131,8 +131,8 @@ dsh-web-ui-all 等）完全一致。bundle 自带的 `cordis.patch.yml` 负责 b
    ```bash
    cd "$DSH_HOME/profiles/web"
    # 在 package.json 的 dependencies 中追加：
-   #   "dsh-newapi-provider": "link:/本包绝对路径/dsh-newapi-provider"
-   # 然后把 "dsh-newapi-provider" 加到同一文件的 bundles 列表
+   #   "dsh-gateway-provider": "link:/本包绝对路径/dsh-gateway-provider"
+   # 然后把 "dsh-gateway-provider" 加到同一文件的 bundles 列表
    pnpm install
    ```
 
@@ -225,7 +225,7 @@ llm-newapi:
 ## 测试
 
 ```bash
-cd dsh-newapi-provider
+cd dsh-gateway-provider
 node test/smoke.mjs            # 全部：catalog/openai×2/工具调用/anthropic/gemini/custom-urls
 node test/smoke.mjs --only custom-urls
 node test/protocol-urls.mjs    # 离线：URL 派生 + 网关解析单元测试

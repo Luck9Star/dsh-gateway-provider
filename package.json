@@ -1,5 +1,5 @@
 {
-  "name": "dsh-newapi-provider",
+  "name": "dsh-gateway-provider",
   "version": "0.1.0",
   "description": "NewAPI (new-api gateway) model provider for the DeepSeek Harness LLM seam: auto-discovers the gateway model list, enriches every model with models.dev parameters (context window / output cap / reasoning), and auto-constructs the per-model request endpoint (OpenAI / Anthropic / Gemini wire formats)",
   "type": "module",
