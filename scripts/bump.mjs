@@ -1,42 +1,35 @@
 #!/usr/bin/env node
 /**
- * Version the relative ESM imports of this package (`./lib/*.js`, `../lib/*.js`)
- * with a `?v=<mark>` query string, so the harness loader (which caches modules
- * by full URL) reloads the whole plugin graph when the composition row's `name`
- * is bumped to `index.js?v=<mark>`.
+ * OBSOLETE — do not use.
  *
- * Usage: node scripts/bump.mjs [mark]
- *   mark defaults to the current epoch millis; the mark is persisted to
- *   `.dsh-version` so the cordis.patch.yml row can be updated to match.
+ * This script used to version the package's relative ESM imports with
+ * `?v=<mark>` query strings and tell you to mount the plugin as
+ * `index.js?v=<mark>` in the profile's cordis.patch.yml. That mechanism is
+ * wrong and actively harmful in current DeepSeek Harness:
  *
- * The versioned files are gitignored by convention: run this before mounting,
- * never commit the `?v=` queries (published sources keep clean specifiers).
+ * - dsh resolves a plugin row's CLIENT half (the "Gateway Models" settings
+ *   section) through `require.resolve('<name>/package.json')` from the
+ *   profile directory. A path-style `name` (with or without a query string)
+ *   can never contribute the client bundle, so the settings UI silently
+ *   never appears — no matter how many times the profile is restarted.
+ * - The host half re-imports everything on every profile restart anyway, so
+ *   the query string buys nothing; it only creates duplicate module
+ *   instances (e.g. `catalog.js?v=X` static imports vs. the plain
+ *   `./lib/catalog.js` dynamic import), doubling caches and risking
+ *   identity bugs.
+ * - Client-bundle edits already hot-apply: the boot graph's `rev` is the
+ *   bundle content hash and `/plugins/<id>/client.js?rev=...` is
+ *   cache-busted automatically.
+
+ * Correct local-checkout mount (see README "方式二 / Local checkout"):
+ *   1. bash scripts/link.sh
+ *   2. profiles/web/package.json dependencies:
+ *        "dsh-newapi-provider": "link:/absolute/path/to/dsh-newapi-provider"
+ *      then `pnpm install` in the profile dir.
+ *   3. cordis.patch.yml row:  name: 'dsh-newapi-provider'
+ *   4. Restart the profile; host edits need another restart, client edits
+ *      only a browser reload.
  */
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(HERE, "..");
-const FILES = [join(ROOT, "index.js"), ...["adapter", "catalog", "modelsdev", "serialize", "sse", "translate", "wire"].map((n) => join(ROOT, "lib", `${n}.js`))];
-
-const mark = process.argv[2] ?? String(Date.now());
-const RE = /(from\s+|import\s*)(["'])(\.[^"']+?)(["'])/g;
-
-let changed = 0;
-for (const file of FILES) {
-  if (!existsSync(file)) continue;
-  const source = readFileSync(file, "utf8");
-  const next = source.replace(RE, (match, prefix, q, spec, q2) => {
-    // Always rewrite the version mark (a fresh mark busts the Node module
-    // cache for every file in the graph, including previously versioned ones).
-    const clean = spec.replace(/\?v=\d+/, "");
-    changed += 1;
-    return `${prefix}${q}${clean}?v=${mark}${q2}`;
-  });
-  if (next !== source) writeFileSync(file, next);
-}
-
-writeFileSync(join(ROOT, ".dsh-version"), `${mark}\n`);
-console.log(`versioned ${changed} import(s) with ?v=${mark}`);
-console.log(`patch name: index.js?v=${mark}`);
+console.error("scripts/bump.mjs is obsolete — remove this invocation.");
+console.error("Mount by package name instead; see README (方式二 / Local checkout).");
+process.exit(1);

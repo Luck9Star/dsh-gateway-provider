@@ -97,24 +97,43 @@ Then:
    the **NewAPI (newapi)** provider appears, and every chat-capable gateway
    model (with models.dev parameters) becomes selectable.
 
-### Local checkout (no restart needed)
+### Local checkout (install by package name)
 
-The web profile hot-reloads its user patch layer, so a local checkout can be
-mounted live:
+Mount the checkout the way every working third-party plugin on this machine is
+mounted — as a **package-name** row. dsh resolves a row's client half (the
+"Gateway Models" settings section) via `require.resolve('<name>/package.json')`
+from the profile directory; a raw-path row can only contribute the host half,
+so the settings UI silently never appears, no matter how often you restart.
 
 1. `bash scripts/link.sh` — symlinks this package's `node_modules` to the
    profile's, so bare `@deepseek-ai/*` imports resolve to the exact module
    instances the harness process uses (single-copy `instanceof` safety).
-2. Add a row to `$DSH_HOME/profiles/<profile>/cordis.patch.yml`:
+2. Register the checkout as a profile link dependency and install it:
+
+   ```bash
+   cd "$DSH_HOME/profiles/web"
+   # add to package.json dependencies:
+   #   "dsh-newapi-provider": "link:/absolute/path/to/dsh-newapi-provider"
+   pnpm install
+   ```
+
+3. Mount the row in `$DSH_HOME/profiles/<profile>/cordis.patch.yml` by package
+   name:
 
    ```yaml
    - insert:
        - id: llm-newapi
-         name: '<absolute-or-profile-relative path to>/index.js'
+         name: 'dsh-newapi-provider'
    ```
 
-   After editing plugin sources, bump a query string on `name`
-   (e.g. `index.js?v=3`) to force a fresh module import.
+4. Restart the profile. The boot graph then serves
+   `/plugins/dsh-newapi-provider/client.js`, and **Settings → 网关模型**
+   (Gateway Models) appears alongside the official Models page.
+
+Client-bundle edits hot-apply after a browser reload (the bundle's `rev` is its
+content hash); host-half edits need a profile restart. **Do not** append query
+strings to `name` (`index.js?v=3`) or to the internal imports — the client-half
+resolution breaks, and Node already re-imports everything on restart.
 
 ## Web configuration (Models page)
 

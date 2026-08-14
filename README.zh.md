@@ -82,22 +82,39 @@ dsh plugin --profile web add dsh-newapi-provider
 3. 重启 profile（bundle 在启动时读取），打开 Web 设置 → 模型：出现
    **NewAPI (newapi)** 提供方，网关全部对话模型（含 models.dev 参数）可选。
 
-### 方式二：本地源码挂载（无需重启）
+### 方式二：本地源码挂载（按包名安装）
 
-web profile 的用户补丁层支持 HMR，本地检出可直接热挂载：
+把本地检出按**包名**挂载——与本机其它正常工作的第三方插件（dsh-ssh、
+dsh-web-ui-all 等）完全一致。dsh 解析一行的客户端半边（自建"网关模型"设置页）
+用的是 `require.resolve('<包名>/package.json')`（以 profile 目录为基准）；
+裸路径行只能贡献宿主半边，设置 UI 会静默地永远不出现——无论重启多少次。
 
 1. `bash scripts/link.sh` — 把本包 `node_modules` 软链到 profile 的
    node_modules，保证 `@deepseek-ai/*` 裸导入解析到 harness 进程正在使用的
    同一份模块实例（单实例 `instanceof` 安全）。
-2. 在 `$DSH_HOME/profiles/<profile>/cordis.patch.yml` 加一行：
+2. 把检出注册为 profile 的 link 依赖并安装：
+
+   ```bash
+   cd "$DSH_HOME/profiles/web"
+   # 在 package.json 的 dependencies 中追加：
+   #   "dsh-newapi-provider": "link:/本包绝对路径/dsh-newapi-provider"
+   pnpm install
+   ```
+
+3. 在 `$DSH_HOME/profiles/<profile>/cordis.patch.yml` 用**包名**加一行：
 
    ```yaml
    - insert:
        - id: llm-newapi
-         name: '<指向本包的绝对/相对路径>/index.js'
+         name: 'dsh-newapi-provider'
    ```
 
-   修改插件源码后，给 `name` 追加查询串（如 `index.js?v=3`）强制重新 import。
+4. 重启 profile。启动图会开始提供 `/plugins/dsh-newapi-provider/client.js`，
+   设置里出现自建的**网关模型**页（与官方 Models 页并存）。
+
+客户端 bundle 改动刷新浏览器即生效（rev 为内容哈希）；宿主侧改动需要重启
+profile。**不要**给 `name`（`index.js?v=3`）或内部 import 追加查询串——
+那会破坏客户端半边解析，而重启本来就会重新 import 全部模块。
 
 ## Web 配置（模型设置页）
 
