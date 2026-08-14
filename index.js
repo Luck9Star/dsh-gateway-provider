@@ -30,9 +30,9 @@ import { credentialRef } from "@deepseek-ai/dsh-credentials";
 import { launchEnvironmentOf } from "@deepseek-ai/dsh-launch-environment";
 import { deepEqualJson, installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
 import { MAX_TIMER_DELAY_MS } from "@deepseek-ai/dsh-timeout";
-import { NewapiAdapter } from "./lib/adapter.js?v=1786670133342";
-import { DEFAULT_EXCLUDE_PATTERNS } from "./lib/catalog.js?v=1786670133342";
-import { DEFAULT_ENDPOINT_PRIORITY } from "./lib/wire.js?v=1786670133342";
+import { NewapiAdapter } from "./lib/adapter.js";
+import { DEFAULT_EXCLUDE_PATTERNS } from "./lib/catalog.js";
+import { DEFAULT_ENDPOINT_PRIORITY } from "./lib/wire.js";
 
 export const name = "llm-newapi";
 export const inject = ["llm"];
