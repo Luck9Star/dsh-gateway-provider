@@ -52,7 +52,10 @@ const ALT_BASE_URL_ENV = "NEWAPI_API_URL";
 export const PUBLIC_BASE_URL = "https://api.newapi.ai";
 export const DEFAULT_MODELS_URL = "https://models.dev/models.json";
 
-const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000;
+// Idle cap on waiting for the next stream chunk: a gateway that stays silent
+// for this long (long reasoning / buffered thinking phases) is treated as hung.
+// 10 minutes is generous enough for very long streaming responses.
+const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 600_000;
 const DEFAULT_CATALOG_TTL_MS = 30 * 60 * 1000;
 
 /** Schema for one model-level override on a gateway (all fields optional). */
