@@ -73,6 +73,8 @@ export const Config = z.object({
    * gateways reject the extended values, so this is an explicit opt-in.
    */
   extendedReasoningLevels: z.boolean().default(false),
+  /** Sort the picker newest-first by release date (unknown dates first). */
+  sortModelsByRelease: z.boolean().default(true),
   /** Model-list source: `auto` (prefer /v1/models), `v1`, or `management`. */
   catalogMode: z.union(["auto", "v1", "management"]).default("auto"),
   /** Model-list cache freshness window. */
@@ -127,6 +129,7 @@ export function resolveAdapterOptions(config, environment) {
     modelsUrl: config.modelsUrl ?? DEFAULT_MODELS_URL,
     useModelsDev: config.useModelsDev ?? true,
     extendedReasoningLevels: config.extendedReasoningLevels ?? false,
+    sortModelsByRelease: config.sortModelsByRelease ?? true,
     catalogMode: config.catalogMode ?? "auto",
     catalogTtlMs,
     includeChatOnly: config.includeChatOnly ?? true,

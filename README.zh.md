@@ -131,6 +131,7 @@ node scripts/patch-web-ui.mjs restore   # 还原
 | `modelsUrl` | `https://models.dev/models.json` | models.dev 数据源（file: URL 可离线） |
 | `useModelsDev` | `true` | 是否用 models.dev 参数增强模型 |
 | `extendedReasoningLevels` | `false` | 未知模型的推理等级兜底是否放宽到全量 off~max（默认仅 off/low/medium/high） |
+| `sortModelsByRelease` | `true` | 选择器按发布日期倒序排列（最新在上，未知日期排最前） |
 | `catalogMode` | `auto` | `auto` / `v1` / `management`（模型列表来源） |
 | `catalogTtlMs` | `1800000` | 模型列表缓存时长 |
 | `includeChatOnly` | `true` | 仅把对话模型放进选择器 |

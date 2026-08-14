@@ -152,6 +152,7 @@ are edited in the `llm-newapi:` section of `$DSH_HOME/settings.yaml`.
 | `modelsUrl` | `https://models.dev/models.json` | models.dev source (file: URLs work offline) |
 | `useModelsDev` | `true` | Enrich gateway models with models.dev parameters |
 | `extendedReasoningLevels` | `false` | Widen the unknown-model reasoning fallback to the full off~max set (default off/low/medium/high) |
+| `sortModelsByRelease` | `true` | Sort the picker newest-first by release date (models with an unknown date sort first) |
 | `catalogMode` | `auto` | `auto` / `v1` / `management` model-list source |
 | `catalogTtlMs` | `1800000` | Model-list cache freshness window |
 | `includeChatOnly` | `true` | Only expose chat-capable models to the picker |
