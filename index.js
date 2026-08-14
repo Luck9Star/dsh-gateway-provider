@@ -66,6 +66,13 @@ export const Config = z.object({
   modelsUrl: z.string().default(DEFAULT_MODELS_URL),
   /** Enrich gateway models with models.dev parameters. */
   useModelsDev: z.boolean().default(true),
+  /**
+   * Widen the unknown-model reasoning fallback (models missing from both the
+   * pi-ai and models.dev catalogs) from the OpenAI-standard off/low/medium/high
+   * to the full normalized set off/minimal/low/medium/high/xhigh/max. Some
+   * gateways reject the extended values, so this is an explicit opt-in.
+   */
+  extendedReasoningLevels: z.boolean().default(false),
   /** Model-list source: `auto` (prefer /v1/models), `v1`, or `management`. */
   catalogMode: z.union(["auto", "v1", "management"]).default("auto"),
   /** Model-list cache freshness window. */
@@ -119,6 +126,7 @@ export function resolveAdapterOptions(config, environment) {
     baseURL: baseURL.replace(/\/+$/, ""),
     modelsUrl: config.modelsUrl ?? DEFAULT_MODELS_URL,
     useModelsDev: config.useModelsDev ?? true,
+    extendedReasoningLevels: config.extendedReasoningLevels ?? false,
     catalogMode: config.catalogMode ?? "auto",
     catalogTtlMs,
     includeChatOnly: config.includeChatOnly ?? true,

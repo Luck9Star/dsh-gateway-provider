@@ -28,7 +28,10 @@
    "deepseek"` → `thinking` + `reasoning_effort`，其余模型走 OpenAI 风格
    `reasoning_effort` 并经 `thinkingLevelMap` 映射）；MiniMax 保留网关实测
    的 `thinking: {type: adaptive|disabled}`。目录未收录的模型回退到
-   models.dev 推断（`reasoning: true` + 家族）。
+   models.dev 推断（`reasoning: true` + 家族）。网关 id 先归一化（去 `provider/` 前缀与
+    `-highspeed`/`-lowspeed` 等渠道后缀），同名模型多 provider 按官方优先
+    （zai/deepseek/minimax/… 先于 openrouter/opencode 等聚合器）解析，因此
+    `glm-5.2-highspeed` 会归一到 `glm-5.2`。
 5. **自动化治理** — 模型列表按 TTL 缓存、惰性刷新；image/speech/embedding 等
    非对话模型默认从选择器剔除（`excludePatterns`）；HTTP 错误统一映射
    （AUTH / RATE_LIMIT / QUOTA_EXCEEDED / CONTEXT_WINDOW_EXCEEDED / SERVER /
@@ -127,6 +130,7 @@ node scripts/patch-web-ui.mjs restore   # 还原
 | `baseURL` | env `NEWAPI_BASE_URL` / `NEWAPI_API_URL` → `https://api.newapi.ai` | 网关地址 |
 | `modelsUrl` | `https://models.dev/models.json` | models.dev 数据源（file: URL 可离线） |
 | `useModelsDev` | `true` | 是否用 models.dev 参数增强模型 |
+| `extendedReasoningLevels` | `false` | 未知模型的推理等级兜底是否放宽到全量 off~max（默认仅 off/low/medium/high） |
 | `catalogMode` | `auto` | `auto` / `v1` / `management`（模型列表来源） |
 | `catalogTtlMs` | `1800000` | 模型列表缓存时长 |
 | `includeChatOnly` | `true` | 仅把对话模型放进选择器 |

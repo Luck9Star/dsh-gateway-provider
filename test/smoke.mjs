@@ -122,8 +122,9 @@ async function testCatalog() {
   const mm3Resolved = await adapter.resolveModel(PROVIDER, "MiniMax-M3");
   check("MiniMax-M3 contextWindow from models.dev", mm3Resolved.context?.contextWindow === 512_000, `context=${mm3Resolved.context?.contextWindow}`);
   check("MiniMax-M3 maxTokens from models.dev", mm3Resolved.defaultMaxTokens === 128_000, `maxTokens=${mm3Resolved.defaultMaxTokens}`);
-  check("MiniMax-M3 exposes reasoning efforts (adaptive mapping)", mm3Resolved.reasoning?.efforts?.length === 3, JSON.stringify(mm3Resolved.reasoning?.efforts?.map((e) => e.id)));
-  check("claude model gets generic reasoning efforts from models.dev", JSON.stringify((await adapter.resolveModel(PROVIDER, "claude-opus-4-8")).reasoning?.efforts?.map((e) => e.id)) === JSON.stringify(["off", "low", "medium", "high"]));
+  check("MiniMax-M3 exposes two-state reasoning efforts", mm3Resolved.reasoning?.efforts?.length === 2, JSON.stringify(mm3Resolved.reasoning?.efforts?.map((e) => e.id)));
+  check("claude model gets reasoning efforts from pi-ai", JSON.stringify((await adapter.resolveModel(PROVIDER, "claude-opus-4-8")).reasoning?.efforts?.map((e) => e.id)) === JSON.stringify(["off", "minimal", "low", "medium", "high", "xhigh", "max"]));
+  check("glm-5.2-highspeed normalizes to glm-5.2 and inherits its levels", JSON.stringify((await adapter.resolveModel(PROVIDER, "glm-5.2-highspeed")).reasoning?.efforts?.map((e) => e.id)) === JSON.stringify(["off", "low", "medium", "high", "max"]));
   check("embedding-ish unknown model keeps provider-native reasoning", (await adapter.resolveModel(PROVIDER, "some-unknown-model-xyz")).reasoning === undefined);
   const unknown = await adapter.resolveModel(PROVIDER, "not-a-real-model-xyz");
   check("unlisted model resolves with configured defaults", unknown.context?.contextWindow === 128000, `context=${unknown.context?.contextWindow}`);

@@ -33,8 +33,14 @@ discovered and driven automatically:
    mirrors pi-ai's openai-completions dispatch (`thinkingFormat === "deepseek"`
    → `thinking` + `reasoning_effort`, otherwise OpenAI-style `reasoning_effort`
    mapped through `thinkingLevelMap`); MiniMax keeps the gateway-verified
-   `thinking: {type: adaptive|disabled}`. Models the catalog misses fall back
-   to models.dev inference (`reasoning: true` + family).
+   `thinking: {type: adaptive|disabled}`. Gateway ids are first normalized
+   (`provider/` prefix and `-highspeed`/`-lowspeed` channel suffixes stripped)
+   and same-named models across providers resolve to their first-party entry
+   (zai/deepseek/minimax/… before openrouter/opencode aggregators), so
+   `glm-5.2-highspeed` normalizes to `glm-5.2`. Models the catalog misses fall
+   back to models.dev inference (`reasoning: true` + family), whose family
+   fallback defaults to off/low/medium/high unless `extendedReasoningLevels`
+   widens it to the full off~max set.
 5. **Operational hygiene** — model list is TTL-cached and lazily refreshed;
    non-chat models (image / speech / embedding / rerank / …) are excluded from
    the picker by default (`excludePatterns`); HTTP errors are mapped to stable
@@ -145,6 +151,7 @@ are edited in the `llm-newapi:` section of `$DSH_HOME/settings.yaml`.
 | `baseURL` | env `NEWAPI_BASE_URL` / `NEWAPI_API_URL` → `https://api.newapi.ai` | Gateway base URL |
 | `modelsUrl` | `https://models.dev/models.json` | models.dev source (file: URLs work offline) |
 | `useModelsDev` | `true` | Enrich gateway models with models.dev parameters |
+| `extendedReasoningLevels` | `false` | Widen the unknown-model reasoning fallback to the full off~max set (default off/low/medium/high) |
 | `catalogMode` | `auto` | `auto` / `v1` / `management` model-list source |
 | `catalogTtlMs` | `1800000` | Model-list cache freshness window |
 | `includeChatOnly` | `true` | Only expose chat-capable models to the picker |
