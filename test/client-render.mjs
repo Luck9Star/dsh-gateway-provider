@@ -34,6 +34,7 @@ function loadModule(language, snapshot, api) {
 			const value = init === null ? snapshot : init === false ? true : typeof init === "function" ? init() : init;
 			return [value, () => {}];
 		},
+		useRef(init) { return { current: init }; },
 		useEffect() {},
 		useCallback(fn) { return fn; },
 	};
@@ -51,7 +52,7 @@ function loadModule(language, snapshot, api) {
 	(0, eval)(SOURCE);
 	moduleExports.apply({ get: (name) => (name === "slots" ? slots : name === "connection" ? { api } : undefined) });
 	if (!captured) throw new Error("settings.section not registered for " + language);
-	return captured;
+	return { captured, moduleExports };
 }
 
 const snapshot = {
@@ -79,10 +80,12 @@ const api = {
 };
 
 let failed = false;
+let firstModuleExports = null;
 for (const language of ["zh-CN", "en-US"]) {
-	const captured = loadModule(language, snapshot, api);
+	const { captured, moduleExports } = loadModule(language, snapshot, api);
+	if (firstModuleExports === null) firstModuleExports = moduleExports;
 	const problems = [];
-	const seen = new Set();
+	let instances = 0;
 	const walk = (node, where) => {
 		if (node === null || node === undefined || typeof node !== "object") {
 			if (node === undefined) problems.push(where + ": undefined text node");
@@ -92,8 +95,7 @@ for (const language of ["zh-CN", "en-US"]) {
 		if (typeof node.type === "function") {
 			const name = node.type.name || "<anon>";
 			const key = where + "/" + name;
-			if (seen.has(key)) return;
-			seen.add(key);
+			instances++;
 			try { walk(node.type(node.props), key); }
 			catch (error) { problems.push(key + " threw: " + (error && error.message)); }
 			return;
@@ -125,7 +127,48 @@ for (const language of ["zh-CN", "en-US"]) {
 		console.error("[FAIL] " + language);
 		problems.forEach((p) => console.error("  - " + p));
 	} else {
-		console.log("[PASS] client render tree (" + language + ") — " + seen.size + " component instances, " + texts.length + " text nodes");
+		console.log("[PASS] client render tree (" + language + ") — " + instances + " component instances, " + texts.length + " text nodes");
+	}
+}
+
+// ---- mergeDiscovered unit checks (pure helper exported by the module) ----
+{
+	const md = firstModuleExports && firstModuleExports.mergeDiscovered;
+	const problems = [];
+	// Key-order-insensitive deep compare (JSON key order follows insertion).
+	const norm = (v) => JSON.stringify(v, (k, val) => {
+		if (val && typeof val === "object" && !Array.isArray(val)) {
+			return Object.keys(val).sort().reduce((acc, key) => { acc[key] = val[key]; return acc; }, {});
+		}
+		return val;
+	});
+	const eq = (label, actual, expected) => {
+		const a = norm(actual), e = norm(expected);
+		if (a !== e) problems.push(label + ": got " + a + ", want " + e);
+	};
+	if (typeof md !== "function") {
+		problems.push("mergeDiscovered is not exported");
+	} else {
+		// Legacy entry (name from the old UI, no _discoveredName) follows the
+		// fresh discovery name instead of freezing the stale one.
+		eq("legacy name follows discovery",
+			md([{ id: "gpt-4o", name: "GPT-4o (old)" }], [{ id: "gpt-4o", name: "GPT-4o (new)", contextWindow: 128000, maxTokens: 16384, protocol: "openai", reasoning: false }]),
+			[{ id: "gpt-4o", _discoveredName: "GPT-4o (new)", _protocol: "openai", _discoveredContext: 128000, _discoveredMax: 16384, _reasoning: false }]);
+		// A user-edited name (differs from the last reported discovery name) wins.
+		eq("user override name wins",
+			md([{ id: "m", name: "Mine", _discoveredName: "Original", disabled: true, protocol: "anthropic" }], [{ id: "m", name: "Original" }]),
+			[{ id: "m", name: "Mine", _discoveredName: "Original", _reasoning: false, disabled: true, protocol: "anthropic" }]);
+		// Entries absent from discovery become custom; discovered meta recorded.
+		eq("absent entry becomes custom",
+			md([{ id: "custom-1", name: "X" }], [{ id: "gpt-5.2", name: "GPT-5.2" }]),
+			[{ id: "gpt-5.2", _discoveredName: "GPT-5.2", _reasoning: false }, { id: "custom-1", name: "X", _custom: true }]);
+	}
+	if (problems.length > 0) {
+		failed = true;
+		console.error("[FAIL] mergeDiscovered unit checks");
+		problems.forEach((p) => console.error("  - " + p));
+	} else {
+		console.log("[PASS] mergeDiscovered unit checks (legacy refresh / override wins / custom marking)");
 	}
 }
 process.exit(failed ? 1 : 0);
