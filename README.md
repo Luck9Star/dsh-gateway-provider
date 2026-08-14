@@ -29,6 +29,11 @@ everything is discovered and driven automatically:
 5. **Per-model toggle / override / custom-add** — a self-built "Gateway Models"
    settings page (independent of the shipped Models page, which only knows
    `llm-deepseek`/`llm-pi-ai`) with:
+   - gateway-type **templates** (newapi / LiteLLM / Higress / OpenAI-compatible
+     / fully custom) shaping the add-gateway form — the custom template takes
+     fully-qualified per-protocol endpoint URLs (`openaiURL` / `responsesURL` /
+     `anthropicURL`); a protocol left empty stays disabled and models are
+     served only through configured protocols;
    - gateway config forms prefilled from current values, dirty tracking,
      http(s) URL validation, and clear-means-inherit semantics (label /
      apiKeyEnv / flavor / catalogMode per gateway);
@@ -167,7 +172,11 @@ content hash); host-half edits need a profile restart.
 |-------|---------|-------------|
 | `label` | `NewAPI` | Display name of the default gateway route (editable in the settings UI) |
 | `apiKeyEnv` | `NEWAPI_API_KEY` | Credential reference (environment variable name) |
-| `baseURL` | env `NEWAPI_BASE_URL` / `NEWAPI_API_URL` → `https://api.newapi.ai` | Gateway base URL |
+| `baseURL` | env `NEWAPI_BASE_URL` / `NEWAPI_API_URL` → `https://api.newapi.ai` | Gateway base URL (unused when protocol URLs are set) |
+| `flavor` | `newapi` | Gateway template label: `newapi` / `litellm` / `higress` / `openai-compatible` / `custom` |
+| `openaiURL` | – | Full chat-completions endpoint URL (custom template; empty = protocol disabled) |
+| `responsesURL` | – | Full Responses endpoint URL (custom template; empty = protocol disabled) |
+| `anthropicURL` | – | Full Anthropic messages endpoint URL (custom template; empty = protocol disabled) |
 | `modelsUrl` | `https://models.dev/models.json` | models.dev source (file: URLs work offline) |
 | `useModelsDev` | `true` | Enrich gateway models with models.dev parameters |
 | `extendedReasoningLevels` | `false` | Widen the unknown-model reasoning fallback to the full off~max set (default off/low/medium/high) |
@@ -221,14 +230,26 @@ llm-newapi:
       baseURL: https://custom.example.com
       apiKeyEnv: CUSTOM_API_KEY
       endpointPriority: [openai-response, openai]  # per-gateway override
+    # Fully-custom gateway: complete endpoint URLs, no shared base. Empty
+    # protocols are disabled; discovery uses the OpenAI-style URL's base, or
+    # nothing (declared models only) when only anthropicURL is set.
+    - id: edge
+      label: Edge GW
+      flavor: custom
+      openaiURL: https://edge.example.com/openai/v1/chat/completions
+      responsesURL: https://edge.example.com/openai/v1/responses
+      anthropicURL: https://edge.example.com/anthropic/v1/messages
+      apiKeyEnv: EDGE_API_KEY
 ```
 
 ## Testing
 
 ```bash
 cd dsh-newapi-provider
-node test/smoke.mjs            # all: catalog / openai × 2 / tool calling / anthropic / gemini
-node test/smoke.mjs --only catalog
+node test/smoke.mjs            # all: catalog / openai × 2 / tool calling / anthropic / gemini / custom-urls
+node test/smoke.mjs --only custom-urls
+node test/protocol-urls.mjs    # offline: URL derivation + gateway resolution units
+node test/client-render.mjs    # offline: settings-UI render tree (zh + en)
 ```
 
 Environment resolution order for the smoke test: process environment →

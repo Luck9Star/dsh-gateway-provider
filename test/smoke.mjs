@@ -15,6 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { NewapiAdapter } from "../lib/adapter.js";
+import { resolveGateways } from "../index.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = path.resolve(HERE, "..");
@@ -266,6 +267,58 @@ async function testMiniMaxReasoning() {
   check("MiniMax high: text produced", highSummary.text.length > 0, JSON.stringify(highSummary.text.slice(0, 40)));
 }
 
+async function testCustomURLs() {
+  console.log("\n--- custom template: full endpoint URLs (openai + anthropic) ---");
+  // Build the connection through the real resolveGateways path: the gateway
+  // carries NO baseURL, only fully-qualified endpoint URLs, exactly as the
+  // settings UI's "Fully custom" template writes them.
+  const base = BASE_URL.replace(/\/+$/, "");
+  const config = {
+    gateways: [{
+      id: "cu", flavor: "custom",
+      openaiURL: `${base}/v1/chat/completions`,
+      anthropicURL: `${base}/v1/messages`,
+    }],
+  };
+  const gws = resolveGateways(config, { get: () => undefined });
+  const conn = gws.find((g) => g.provider === "gateway:cu").connection;
+  check("custom connection derived protocol bases",
+    conn.apiBases?.["openai-completions"] === `${base}/v1` && conn.apiBases?.["anthropic-messages"] === base,
+    JSON.stringify(conn.apiBases));
+  check("custom connection derives the discovery base", conn.catalogBase === base, `catalogBase=${conn.catalogBase}`);
+  check("custom availability is exactly the configured set", JSON.stringify(conn.availableTypes) === JSON.stringify(["openai", "anthropic"]), JSON.stringify(conn.availableTypes));
+
+  const options = (_provider) => conn;
+  const providerInfo = (provider) => ({ id: provider, name: "Custom URLs" });
+  const adapter = new NewapiAdapter({ options, resolveApiKey: async () => API_KEY, providerInfo, providerCache: new Map(), resolveAttachments: () => undefined });
+  const models = await adapter.listModels("gateway:cu");
+  check("discovery works through the URL-derived base", models.length > 0, `${models.length} models`);
+
+  const openai = await collectStream(adapter, {
+    model: "deepseek-v4-flash",
+    messages: [{ role: "user", content: [{ type: "text", text: "Reply with exactly: CUSTOM OK" }] }],
+    maxTokens: 128,
+  });
+  const so = summarize(openai);
+  check("custom openai URL streams chat completions", so.text.includes("CUSTOM OK"), JSON.stringify(so.text.slice(0, 60)));
+  check("custom openai finish stop", so.finish?.kind === "stop", JSON.stringify(so.finish));
+
+  // Anthropic wire through the full /v1/messages URL; the model is pinned to
+  // anthropic so the priority cannot route it elsewhere.
+  const anAdapter = new NewapiAdapter({
+    options: () => ({ ...conn, modelOverrides: { "MiniMax-M3": { protocol: "anthropic" } } }),
+    resolveApiKey: async () => API_KEY, providerInfo, providerCache: new Map(), resolveAttachments: () => undefined,
+  });
+  const anthropic = await collectStream(anAdapter, {
+    model: "MiniMax-M3",
+    messages: [{ role: "user", content: [{ type: "text", text: "Reply with exactly: CUSTOM ANTHROPIC OK" }] }],
+    maxTokens: 128,
+  });
+  const sa = summarize(anthropic);
+  check("custom anthropic URL streams messages", sa.text.length > 0, JSON.stringify(sa.text.slice(0, 60)));
+  check("custom anthropic usage", sa.usage?.inputTokens !== undefined, JSON.stringify(sa.usage));
+}
+
 async function main() {
   const only = process.argv.findIndex((a) => a === "--only");
   const onlyName = only !== -1 ? process.argv[only + 1] : undefined;
@@ -277,6 +330,7 @@ async function main() {
     tools: testToolCall,
     anthropic: testAnthropicWire,
     gemini: testGeminiWire,
+    "custom-urls": testCustomURLs,
   };
   for (const [name, fn] of Object.entries(tests)) {
     if (onlyName && name !== onlyName) continue;

@@ -24,6 +24,10 @@
    自动补齐每个模型的 context window、输出上限、推理等级、发布日期；缺失时回退到配置默认值。
 5. **模型级开关 / 覆写 / 自定义添加** — 通过自建的"网关模型"设置页（独立于官方
    Models 页）提供：
+   - 网关类型**模板**（newapi / LiteLLM / Higress / OpenAI 兼容 / 完全自定义）：
+     模板决定添加网关表单的形态 —— 完全自定义模板直接填写各协议**完整**端点地址
+     （`openaiURL` / `responsesURL` / `anthropicURL`），留空的协议不启用，
+     模型仅以已启用协议请求；
    - 网关配置表单：回填当前值、脏检查、http(s) URL 校验、清空即继承语义
      （label / apiKeyEnv / flavor / catalogMode 均可按网关覆盖）；
    - 逐模型覆写编辑器（显示名 / 协议 / 上下文窗口 / 输出上限 / 思考级别），
@@ -148,7 +152,11 @@ profile。
 |------|------|------|
 | `label` | `NewAPI` | 默认网关路由的显示名（设置页可改） |
 | `apiKeyEnv` | `NEWAPI_API_KEY` | 凭据引用（环境变量名） |
-| `baseURL` | env `NEWAPI_BASE_URL` / `NEWAPI_API_URL` → `https://api.newapi.ai` | 网关地址 |
+| `baseURL` | env `NEWAPI_BASE_URL` / `NEWAPI_API_URL` → `https://api.newapi.ai` | 网关地址（配置了协议 URL 后不再使用） |
+| `flavor` | `newapi` | 网关模板标注：`newapi` / `litellm` / `higress` / `openai-compatible` / `custom` |
+| `openaiURL` | – | OpenAI 兼容完整端点地址（完全自定义模板；留空 = 不启用该协议） |
+| `responsesURL` | – | Responses 完整端点地址（完全自定义模板；留空 = 不启用该协议） |
+| `anthropicURL` | – | Anthropic messages 完整端点地址（完全自定义模板；留空 = 不启用该协议） |
 | `modelsUrl` | `https://models.dev/models.json` | models.dev 数据源（file: URL 可离线） |
 | `useModelsDev` | `true` | 是否用 models.dev 参数增强模型 |
 | `extendedReasoningLevels` | `false` | 未知模型的推理等级兜底是否放宽到全量 off~max（默认仅 off/low/medium/high） |
@@ -202,14 +210,26 @@ llm-newapi:
       baseURL: https://custom.example.com
       apiKeyEnv: CUSTOM_API_KEY
       endpointPriority: [openai-response, openai]  # 逐网关覆写
+    # 完全自定义网关：三个协议地址写全，不共享基础地址。留空的协议
+    # 不启用；模型发现用 OpenAI 形态地址的基础路径，只填 anthropicURL
+    # 时则不做发现（仅使用手动声明的模型）。
+    - id: edge
+      label: 边缘网关
+      flavor: custom
+      openaiURL: https://edge.example.com/openai/v1/chat/completions
+      responsesURL: https://edge.example.com/openai/v1/responses
+      anthropicURL: https://edge.example.com/anthropic/v1/messages
+      apiKeyEnv: EDGE_API_KEY
 ```
 
 ## 测试
 
 ```bash
 cd dsh-newapi-provider
-node test/smoke.mjs            # 全部：catalog/openai×2/工具调用/anthropic/gemini
-node test/smoke.mjs --only catalog
+node test/smoke.mjs            # 全部：catalog/openai×2/工具调用/anthropic/gemini/custom-urls
+node test/smoke.mjs --only custom-urls
+node test/protocol-urls.mjs    # 离线：URL 派生 + 网关解析单元测试
+node test/client-render.mjs    # 离线：设置页渲染树（中/英）
 ```
 
 冒烟测试环境来源优先级：进程环境变量 → 插件目录 `.env` →

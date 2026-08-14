@@ -65,6 +65,7 @@ const snapshot = {
 	],
 	gateways: [
 		{ id: "backup", label: "Backup", baseURL: "https://b.example.com", flavor: "litellm", apiKeyEnv: "BACKUP_KEY", catalogMode: "v1", models: [{ id: "m1" }] },
+		{ id: "edge", label: "Edge GW", flavor: "custom", openaiURL: "https://edge.example.com/openai/v1/chat/completions", anthropicURL: "https://edge.example.com/anthropic/v1/messages", apiKeyEnv: "EDGE_KEY", models: [{ id: "c1" }] },
 	],
 };
 const api = {
@@ -118,8 +119,10 @@ for (const language of ["zh-CN", "en-US"]) {
 	collect(captured.renderer({ api }));
 	const has = (s) => texts.some((t) => t.includes(s));
 	const mustHave = language.startsWith("zh")
-		? ["网关模型管理", "默认网关", "gateway:backup", "思考级别", "已隐藏", "自定义", "API Key 变量名", "留空则继承默认网关"]
-		: ["Gateway Model Management", "Default gateway", "gateway:backup", "Reasoning levels", "hidden", "Custom", "API Key env var", "inherits the default gateway"];
+		? ["网关模型管理", "默认网关", "gateway:backup", "gateway:edge", "思考级别", "已隐藏", "自定义", "API Key 变量名", "留空则继承默认网关",
+			"完全自定义", "OpenAI 兼容地址", "/chat/completions 结尾", "/v1/messages 结尾", "anthropic"]
+		: ["Gateway Model Management", "Default gateway", "gateway:backup", "gateway:edge", "Reasoning levels", "hidden", "Custom", "API Key env var", "inherits the default gateway",
+			"Fully custom", "OpenAI-compatible URL", "/chat/completions", "/v1/messages", "anthropic"];
 	for (const s of mustHave) if (!has(s)) problems.push("missing expected text: " + s);
 
 	if (problems.length > 0) {

@@ -2,8 +2,10 @@
  * Gateway model provider plugin for DeepSeek Harness.
  *
  * Registers one or more `gateway:*` provider routes on `ctx.llm`, each backed
- * by an OpenAI-compatible `/v1/models` gateway (newapi, LiteLLM, or any
- * generic gateway). Backwards-compatible with the original single-connection
+ * by an OpenAI-compatible `/v1/models` gateway (newapi, LiteLLM, Higress, or
+ * any generic gateway), or by a fully-custom gateway whose per-protocol
+ * endpoint URLs (`openaiURL` / `responsesURL` / `anthropicURL`) are written
+ * out in full. Backwards-compatible with the original single-connection
  * `newapi` route: the legacy flat fields (`baseURL`, `apiKeyEnv`, …) build a
  * default gateway, while the `gateways` array adds more.
  *
@@ -33,7 +35,7 @@ import { deepEqualJson, installSettingsSection, settingsNamespace } from "@deeps
 import { MAX_TIMER_DELAY_MS } from "@deepseek-ai/dsh-timeout";
 import { NewapiAdapter } from "./lib/adapter.js";
 import { DEFAULT_EXCLUDE_PATTERNS, DEFAULT_MAX_TOKENS, DEFAULT_CONTEXT_WINDOW } from "./lib/catalog.js";
-import { DEFAULT_ENDPOINT_PRIORITY } from "./lib/pi-provider.js";
+import { DEFAULT_ENDPOINT_PRIORITY, deriveProtocolURLs } from "./lib/protocols.js";
 
 export const name = "llm-newapi";
 export const inject = ["llm"];
@@ -76,21 +78,31 @@ const ModelOverrideSchema = z.object({
   reasoningLevels: z.array(z.string()),
 });
 
+/** Gateway-type templates the settings UI offers (informational labels). */
+const FLAVORS = ["newapi", "litellm", "higress", "openai-compatible", "custom"];
+
 /**
- * Schema for one gateway in the `gateways` array (id and baseURL required;
- * the rest fall back to the shared defaults at resolution time).
+ * Schema for one gateway in the `gateways` array (id required; either
+ * `baseURL` or at least one protocol URL must be set — the rest falls back
+ * to the shared defaults at resolution time).
  */
 const GatewaySchema = z.object({
   /** Short stable id; becomes the provider route suffix (`gateway:<id>`). */
   id: z.string().required(),
   /** Human-readable gateway name. */
   label: z.string(),
-  /** Gateway base URL. */
-  baseURL: z.string().required(),
+  /** Gateway base URL (unused when protocol URL fields are set). */
+  baseURL: z.string(),
+  /** Full chat-completions endpoint URL (custom template). */
+  openaiURL: z.string(),
+  /** Full Responses endpoint URL (custom template). */
+  responsesURL: z.string(),
+  /** Full Anthropic messages endpoint URL (custom template). */
+  anthropicURL: z.string(),
   /** Environment-variable name (credential ref) holding the API key. */
   apiKeyEnv: z.string().role("credential-ref"),
-  /** Gateway type label (informational only — protocol dispatch is driven by each model's `supported_endpoint_types` via the pi-ai SDK). */
-  flavor: z.union(["newapi","litellm","openai-compatible"]),
+  /** Gateway type label (newapi/litellm/higress/openai-compatible/custom). */
+  flavor: z.union(FLAVORS),
   /** Model-list source: `auto` (prefer /v1/models), `v1`, or `management`. */
   catalogMode: z.union(["auto", "v1", "management"]),
   /** User id sent to the management API when it is used. */
@@ -109,8 +121,14 @@ export const Config = z.object({
   apiKeyEnv: z.string().role("credential-ref").default(DEFAULT_API_KEY_ENV),
   /** Default gateway base URL; resolved from NEWAPI_BASE_URL / NEWAPI_API_URL then the public cloud default. */
   baseURL: z.string(),
-  /** Gateway type label shown in the UI (informational; does not affect protocol dispatch). */
-  flavor: z.union(["newapi","litellm","openai-compatible"]).default("newapi"),
+  /** Full chat-completions endpoint URL (custom template for the default gateway). */
+  openaiURL: z.string(),
+  /** Full Responses endpoint URL (custom template for the default gateway). */
+  responsesURL: z.string(),
+  /** Full Anthropic messages endpoint URL (custom template for the default gateway). */
+  anthropicURL: z.string(),
+  /** Gateway type label shown in the UI (newapi/litellm/higress/openai-compatible/custom). */
+  flavor: z.union(FLAVORS).default("newapi"),
   /** models.dev catalog URL (any fetch-able URL; file: works for offline mirrors). */
   modelsUrl: z.string().default(DEFAULT_MODELS_URL),
   /** Enrich gateway models with models.dev parameters. */
@@ -146,16 +164,27 @@ export const Config = z.object({
 
 /**
  * Normalize one gateway entry into the connection facts the adapter needs.
- * Per-gateway fields fall back to the shared defaults.
+ * Per-gateway fields fall back to the shared defaults. Protocol URL fields
+ * (`openaiURL` / `responsesURL` / `anthropicURL`, the "custom" template)
+ * redefine the gateway's protocol surface: each configured URL becomes the
+ * exact SDK base for its wire protocol, unconfigured protocols are
+ * unavailable, and the plain `baseURL` is no longer inherited from the
+ * shared defaults (nothing may silently point at another gateway).
  */
 function gatewayConnection(gw, defaults, provider, label) {
   const apiKeyEnv = gw.apiKeyEnv ?? defaults.apiKeyEnv;
   const flavor = gw.flavor ?? defaults.flavor ?? "openai-compatible";
+  const proto = deriveProtocolURLs(gw);
+  const ownBase = typeof gw.baseURL === "string" && gw.baseURL.length > 0 ? gw.baseURL.replace(/\/+$/, "") : "";
+  const baseURL = proto !== undefined ? ownBase : (ownBase || defaults.baseURL);
   return {
     providerId: provider,
     displayName: label,
     apiKeyEnv: typeof apiKeyEnv === "string" ? credentialRef(apiKeyEnv) : defaults.apiKeyEnv,
-    baseURL: gw.baseURL ?? defaults.baseURL,
+    baseURL,
+    apiBases: proto?.apiBases,
+    availableTypes: proto?.availableTypes,
+    catalogBase: proto !== undefined ? (proto.catalogBase ?? (ownBase || null)) : baseURL,
     flavor,
     modelsUrl: defaults.modelsUrl,
     useModelsDev: defaults.useModelsDev,
@@ -194,11 +223,14 @@ function routeIdOf(id) {
 
 /** Build the gateway list and provider-route map from the resolved config. */
 export function resolveGateways(config, environment) {
-  const baseURL = config.baseURL
+  const rootProto = deriveProtocolURLs(config);
+  const explicitBase = config.baseURL
     ?? environment?.get(DEFAULT_BASE_URL_ENV)?.value
-    ?? environment?.get(ALT_BASE_URL_ENV)?.value
-    ?? PUBLIC_BASE_URL;
-  if (typeof baseURL !== "string" || baseURL.length === 0) {
+    ?? environment?.get(ALT_BASE_URL_ENV)?.value;
+  // Root protocol URLs (custom template) replace the base entirely; without
+  // them the base keeps its env / public-cloud fallback chain.
+  const baseURL = rootProto !== undefined ? (explicitBase ?? "") : (explicitBase ?? PUBLIC_BASE_URL);
+  if ((typeof baseURL !== "string" || baseURL.length === 0) && rootProto === undefined) {
     throw new Error('llm-newapi: baseURL must be a non-empty string (set llm-newapi.baseURL in settings or export NEWAPI_BASE_URL)');
   }
   const defaults = {
@@ -224,13 +256,20 @@ export function resolveGateways(config, environment) {
   // The legacy `newapi` route is always the first gateway, built from flat fields.
   const defaultLabel = config.label ?? "NewAPI";
   const gateways = [
-    { provider: PROVIDER, id: "default", label: defaultLabel, connection: gatewayConnection({ baseURL: defaults.baseURL, models: config.models ?? [] }, defaults, PROVIDER, defaultLabel) },
+    { provider: PROVIDER, id: "default", label: defaultLabel, connection: gatewayConnection({
+      baseURL,
+      models: config.models ?? [],
+      openaiURL: config.openaiURL,
+      responsesURL: config.responsesURL,
+      anthropicURL: config.anthropicURL,
+    }, defaults, PROVIDER, defaultLabel) },
   ];
   // Additional gateways from the array.
   for (const gw of config.gateways ?? []) {
     const id = routeIdOf(gw.id);
     if (id.length === 0) continue;
-    if (gw.baseURL === undefined || gw.baseURL.length === 0) continue;
+    const hasBase = typeof gw.baseURL === "string" && gw.baseURL.length > 0;
+    if (!hasBase && deriveProtocolURLs(gw) === undefined) continue;
     const provider = `${GATEWAY_PREFIX}${id}`;
     const label = gw.label ?? provider;
     gateways.push({
@@ -307,7 +346,9 @@ export function apply(ctx, config) {
   let directoryFacts = undefined;
   const ensureRegistration = () => {
     const gateways = resolve();
-    const facts = gateways.map((g) => `${g.provider}:${g.connection.baseURL}:${g.label}`);
+    // Include the per-protocol bases: URL-addressed (custom) gateways may
+    // share an empty plain baseURL, and URL-only edits must re-register.
+    const facts = gateways.map((g) => `${g.provider}:${g.connection.baseURL}:${g.label}:${g.connection.apiBases ? JSON.stringify(g.connection.apiBases) : ""}`);
     if (deepEqualJson(facts, directoryFacts)) return;
     const entries = gateways.map((g, i) => ({
       provider: g.provider,
@@ -331,7 +372,14 @@ export function apply(ctx, config) {
     const gateways = resolve();
     const gw = request.provider !== undefined ? gateways.find((g) => g.provider === request.provider) : gateways[0];
     if (gw === undefined) return [];
-    const connection = { ...gw.connection, baseURL: (request.baseURL ?? gw.connection.baseURL).replace(/\/+$/, "") };
+    // An explicit baseURL override (the settings UI's test/fetch path) wins
+    // for discovery; empty strings count as absent.
+    const reqBase = typeof request.baseURL === "string" && request.baseURL.length > 0
+      ? request.baseURL.replace(/\/+$/, "")
+      : undefined;
+    const connection = reqBase !== undefined
+      ? { ...gw.connection, baseURL: reqBase, catalogBase: reqBase }
+      : gw.connection;
     const apiKey = request.apiKey ?? await resolveApiKey(gw.connection).catch(() => undefined);
     const { discoverGatewayModels } = await import("./lib/catalog.js");
     try {
