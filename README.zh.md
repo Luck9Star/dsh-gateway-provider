@@ -2,57 +2,55 @@
 
 > English: [README.md](README.md)
 
-**NewAPI（new-api 网关）模型 Provider 插件** — 为 DeepSeek Harness 的 LLM 适配层
-(`ctx.llm`) 注册 `newapi` provider 路由。纯 ESM、零运行时依赖（仅 `fetch`）。
-无静态模型清单——一切自动发现、自动驱动：
+**通用 LLM 网关 Provider 插件** — 为 DeepSeek Harness 的 LLM 适配层
+(`ctx.llm`) 注册一个或多个网关 provider 路由（`newapi` 默认路由 + 可选的
+`gateway:<id>` 路由），支持 newapi / LiteLLM / 任意 OpenAI 兼容网关。
+纯 ESM、零运行时依赖（仅 `fetch`）。无静态模型清单——一切自动发现、自动驱动：
 
-1. **自动获取模型** — 从网关实时拉取模型列表：
+1. **多网关同时连接** — 旧的单连接配置（`baseURL`/`apiKeyEnv` 等扁平字段）自动
+   构建默认 `newapi` 路由（完全向后兼容）；新增 `gateways` 数组可挂载更多网关，
+   每个成为独立的 `gateway:<id>` provider 路由，各自独立 catalog 缓存。
+2. **统一网关协议 + 模型级覆盖** — 每个网关设置 `flavor`（`newapi` /
+   `litellm` / `openai-compatible`）决定默认的请求协议地址模板，也可用
+   `protocolPaths` 逐协议覆写完整地址；单个模型还能用 `protocol` 强制覆盖其协议。
+3. **自动获取模型** — 从网关实时拉取模型列表：
    - 首选 `GET {base}/v1/models`（OpenAI 兼容，返回每个模型的
-     `supported_endpoint_types` —— 即该模型“支持的请求格式”）；
+     `supported_endpoint_types` —— 即该模型"支持的请求格式"）；
    - 兜底 `GET {base}/api/user/models`（管理 API，扁平 id 列表）。
-2. **models.dev 参数自动控制模型** — 用 <https://models.dev/models.json> 的
-   参数（`limit.context` / `limit.output` / `reasoning` / `family` / 描述等）
-   自动补齐每个模型的 context window、输出上限、推理等级、显示名与描述；
-   命名空间键（`minimax/MiniMax-M3`）模糊匹配，缺失时回退到配置默认值。
-3. **按模型支持的请求格式自动拼接地址** — 每个请求根据该模型在网关列表里
-   声明的 `supported_endpoint_types` × 插件优先级，自动选择 wire 格式并拼 URL：
-   - `openai` → `POST {base}/v1/chat/completions`
-   - `anthropic` → `POST {base}/v1/messages`
-   - `gemini` → `POST {base}/v1beta/models/{model}:streamGenerateContent?alt=sse`
-4. **思考级别直接引用 harness 官方模型目录（pi-ai）** — 推理等级选择器不再
-   机械推导，而是复用 DeepSeek Harness 自带的 pi-ai 模型目录（官方
-   `llm-pi-ai` 适配器的底层库，随发行版安装）：每个模型条目带 `reasoning`
-   与 `thinkingLevelMap`（逐思考级别声明提供方原生 wire 值），可选级别用
-   pi-ai 的 `getSupportedThinkingLevels` 计算（`off` / `minimal` / `low` /
-   `medium` / `high` / `xhigh` / `max`，含目录级的支持矩阵——例如 GLM-5.2
-   声明不支持 off、GPT-5.5 暴露 xhigh、Kimi K2.6 只发 thinking）。wire
-   序列化照搬 pi-ai 的 openai-completions 分发（`thinkingFormat ===
-   "deepseek"` → `thinking` + `reasoning_effort`，其余模型走 OpenAI 风格
-   `reasoning_effort` 并经 `thinkingLevelMap` 映射）；MiniMax 保留网关实测
-   的 `thinking: {type: adaptive|disabled}`。目录未收录的模型回退到
-   models.dev 推断（`reasoning: true` + 家族）。网关 id 先归一化（去 `provider/` 前缀与
-    `-highspeed`/`-lowspeed` 等渠道后缀），同名模型多 provider 按官方优先
-    （zai/deepseek/minimax/… 先于 openrouter/opencode 等聚合器）解析，因此
-    `glm-5.2-highspeed` 会归一到 `glm-5.2`。
-5. **自动化治理** — 模型列表按 TTL 缓存、惰性刷新；image/speech/embedding 等
-   非对话模型默认从选择器剔除（`excludePatterns`）；HTTP 错误统一映射
-   （AUTH / RATE_LIMIT / QUOTA_EXCEEDED / CONTEXT_WINDOW_EXCEEDED / SERVER /
-   TRANSPORT…），支持 `retry-after` 与 `x-request-id`，流空闲看门狗防挂死。
+4. **models.dev 参数自动控制模型** — 用 <https://models.dev/models.json> 的
+   参数（`limit.context` / `limit.output` / `reasoning` / `family` / `release_date`）
+   自动补齐每个模型的 context window、输出上限、推理等级、发布日期；缺失时回退到配置默认值。
+5. **模型级开关 / 覆写 / 自定义添加** — 通过自建的"网关模型"设置页（独立于官方
+   Models 页），可逐模型：隐藏/显示、覆写 context/maxTokens/协议、添加网关未列出的
+   自定义内测模型。设置页通过转发的 settings/llm API 读写，无需额外 RPC。
+6. **思考级别直接引用 harness 官方模型目录（pi-ai）** — 推理等级选择器复用
+   pi-ai 模型目录：每个模型条目带 `reasoning` 与 `thinkingLevelMap`，可选级别用
+   pi-ai 的 `getSupportedThinkingLevels` 计算。网关 id 先归一化（去 `provider/`
+   前缀与 `-highspeed`/`-lowspeed` 等渠道后缀），同名模型多 provider 按官方优先
+   （zai/deepseek/minimax/… 先于聚合器）解析，`glm-5.2-highspeed` 归一到
+   `glm-5.2` 但保留独立显示名。
+7. **发布日期排序** — 选择器按 models.dev 的 `release_date` 倒序排列（最新在上，
+   未知日期排最前），可经 `sortModelsByRelease` 关闭。
+8. **自动化治理** — 模型列表按 TTL 缓存、惰性刷新；image/speech/embedding 等非对话
+   模型默认从选择器剔除（`excludePatterns`）；HTTP 错误统一映射。
 
 ## 目录结构
 
 ```
 dsh-newapi-provider/
-├── index.js            # 插件入口：Config 校验、provider 注册、设置/凭据接线
+├── index.js            # 插件入口：多网关 Config 校验、provider 注册、设置/凭据接线
 ├── cordis.patch.yml    # dsh.bundle 补丁（标准 `dsh plugin add` 可安装）
 ├── lib/
-│   ├── catalog.js      # 网关模型列表自动发现 + models.dev 合并 + TTL 缓存 + 过滤
+│   ├── gateways.js     # 协议 URL 模板（newapi/litellm/openai-compatible）+ endpoint 选择
+│   ├── catalog.js      # 网关模型列表自动发现 + models.dev 合并 + 模型覆写/自定义 + TTL 缓存
 │   ├── modelsdev.js    # models.dev 拉取/模糊匹配/参数提取
-│   ├── wire.js         # endpoint 选择 + 按格式拼接请求 URL
-│   ├── serialize.js    # harness 消息 → openai/anthropic/gemini 三种请求体
-│   ├── translate.js    # 三种格式 SSE → harness StreamChunk
+│   ├── thinking.js     # pi-ai 思考级别 + 变体归一化（baseModelId/variantLabel/findPiModel）
+│   ├── wire.js         # endpoint 选择 + URL 拼接（向后兼容，委托 gateways.js）
+│   ├── serialize.js    # harness 消息 → openai/openai-response/anthropic/gemini 请求体
+│   ├── translate.js    # 各格式 SSE → harness StreamChunk
 │   ├── sse.js          # 零依赖 SSE 解析器
-│   └── adapter.js      # NewapiAdapter（LlmAdapter 子类）
+│   ├── adapter.js      # NewapiAdapter（多网关，按 provider 解析连接）
+│   └── client.js       # 客户端：自建"网关模型"设置页（settings.section）
 ├── test/smoke.mjs      # 直连网关的集成冒烟测试
 └── scripts/link.sh     # 链接 harness profile node_modules（单实例保证）
 ```
@@ -145,13 +143,47 @@ node scripts/patch-web-ui.mjs restore   # 还原
 | `streamIdleTimeoutMs` | `300000` | 流空闲看门狗 |
 | `retryPolicy` | 标准重试 | 与 llm-deepseek 同构 |
 
-示例：
+示例（单网关，向后兼容）：
 
 ```yaml
 llm-newapi:
   baseURL: https://your-newapi-instance.com
+  flavor: newapi
   endpointPriority: [openai, anthropic, gemini]
   excludePatterns: ["(^|/|-)image", "(^|/|-)speech"]
+```
+
+多网关 + 模型级覆盖示例：
+
+```yaml
+llm-newapi:
+  baseURL: https://your-newapi-instance.com
+  flavor: newapi
+  # 默认网关的模型级覆写（隐藏 / 覆写 / 自定义添加）
+  models:
+    - id: glm-5.2
+      disabled: true              # 从选择器隐藏
+    - id: glm-5.2-highspeed
+      contextWindow: 1000000      # 覆写上下文
+      protocol: openai            # 强制协议
+    - id: my-internal-model       # 自定义内测模型（网关未列出）
+      name: 我的内测模型
+      contextWindow: 200000
+  # 额外网关：每个成为独立的 gateway:<id> 路由
+  gateways:
+    - id: litellm-prod
+      label: LiteLLM 生产
+      baseURL: https://litellm.example.com
+      apiKeyEnv: LITELLM_API_KEY
+      flavor: litellm
+      protocolPaths:
+        anthropic: /v1/messages   # 逐协议覆写完整地址
+    - id: custom-gw
+      label: 自定义网关
+      baseURL: https://custom.example.com
+      apiKeyEnv: CUSTOM_API_KEY
+      protocolPaths:
+        openai: /api/chat         # 自定义 openai 路径
 ```
 
 ## 测试

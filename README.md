@@ -2,68 +2,66 @@
 
 > 中文文档：[README.zh.md](README.zh.md)
 
-**NewAPI (new-api gateway) model provider plugin for DeepSeek Harness** — registers
-a `newapi` provider route on the harness LLM seam (`ctx.llm`). Pure ESM, zero
-runtime dependencies (`fetch` only). No static model list — everything is
-discovered and driven automatically:
+**Generic LLM gateway model provider plugin for DeepSeek Harness** — registers
+one or more gateway provider routes (the default `newapi` route plus optional
+`gateway:<id>` routes) on the harness LLM seam (`ctx.llm`). Supports newapi /
+LiteLLM / any OpenAI-compatible gateway. Pure ESM, zero runtime dependencies
+(`fetch` only). No static model list — everything is discovered and driven
+automatically:
 
-1. **Automatic model discovery** — pulls the live model list from your gateway:
+1. **Multiple gateways at once** — the legacy single-connection fields
+   (`baseURL` / `apiKeyEnv` / …) always seed the default `newapi` route (fully
+   backwards compatible); the new `gateways` array mounts more gateways, each
+   becoming its own `gateway:<id>` provider route with an independent catalog cache.
+2. **Gateway-level protocol + model-level override** — each gateway's `flavor`
+   (`newapi` / `litellm` / `openai-compatible`) sets the default request-protocol
+   URL templates; `protocolPaths` overrides per-protocol paths; an individual
+   model can force its protocol with `protocol`.
+3. **Automatic model discovery** — pulls the live model list from each gateway:
    - Primary: `GET {base}/v1/models` (OpenAI-compatible; every entry carries
      `supported_endpoint_types` — the per-model supported request formats);
    - Fallback: `GET {base}/api/user/models` (management API, flat id list).
-2. **Automatic model control from models.dev** — enriches every model with
+4. **Automatic model control from models.dev** — enriches every model with
    <https://models.dev/models.json> parameters (`limit.context` / `limit.output` /
-   `reasoning` / `family` / description) so context windows, output caps,
-   reasoning levels, display names, and descriptions are real instead of
-   one-size-fits-all. Namespaced keys (`minimax/MiniMax-M3`) are matched
-   fuzzily; missing entries fall back to configured defaults.
-3. **Per-model request URL auto-assembly** — for each request, the wire format
-   is selected from the model's advertised `supported_endpoint_types` (intersected
-   with the plugin's priority) and the matching gateway URL is constructed:
-   - `openai` → `POST {base}/v1/chat/completions`
-   - `anthropic` → `POST {base}/v1/messages`
-   - `gemini` → `POST {base}/v1beta/models/{model}:streamGenerateContent?alt=sse`
-4. **Thinking levels from the harness's own model directory** — the reasoning
-   selector reuses DeepSeek Harness's pi-ai model catalog (the library behind
-   the official `llm-pi-ai` adapter, installed with every deployment): each
-   model's entry carries `reasoning` + a `thinkingLevelMap` spelling the
-   provider-native wire value per thinking level, and the selectable levels
-   are computed with pi-ai's own `getSupportedThinkingLevels` (`off` /
-   `minimal` / `low` / `medium` / `high` / `xhigh` / `max`, with the catalog's
-   per-level support matrix — e.g. GLM-5.2 declares `off` unsupported,
-   GPT-5.5 exposes `xhigh`, Kimi K2.6 sends `thinking` only). Wire serialization
-   mirrors pi-ai's openai-completions dispatch (`thinkingFormat === "deepseek"`
-   → `thinking` + `reasoning_effort`, otherwise OpenAI-style `reasoning_effort`
-   mapped through `thinkingLevelMap`); MiniMax keeps the gateway-verified
-   `thinking: {type: adaptive|disabled}`. Gateway ids are first normalized
+   `reasoning` / `family` / `release_date`) so context windows, output caps,
+   reasoning levels, and release dates are real instead of one-size-fits-all.
+5. **Per-model toggle / override / custom-add** — a self-built "Gateway Models"
+   settings page (independent of the shipped Models page, which only knows
+   `llm-deepseek`/`llm-pi-ai`) lets you hide/show each model, override its
+   context/maxTokens/protocol, and add custom internal-test models the gateway
+   does not list. It reads/writes through the forwarded settings + llm APIs.
+6. **Thinking levels from the harness's own model directory** — the reasoning
+   selector reuses DeepSeek Harness's pi-ai model catalog: each model carries
+   `reasoning` + a `thinkingLevelMap`, and selectable levels are computed with
+   pi-ai's `getSupportedThinkingLevels`. Gateway ids are first normalized
    (`provider/` prefix and `-highspeed`/`-lowspeed` channel suffixes stripped)
    and same-named models across providers resolve to their first-party entry
-   (zai/deepseek/minimax/… before openrouter/opencode aggregators), so
-   `glm-5.2-highspeed` normalizes to `glm-5.2`. Models the catalog misses fall
-   back to models.dev inference (`reasoning: true` + family), whose family
-   fallback defaults to off/low/medium/high unless `extendedReasoningLevels`
-   widens it to the full off~max set.
-5. **Operational hygiene** — model list is TTL-cached and lazily refreshed;
-   non-chat models (image / speech / embedding / rerank / …) are excluded from
-   the picker by default (`excludePatterns`); HTTP errors are mapped to stable
-   harness codes (AUTH / RATE_LIMIT / QUOTA_EXCEEDED / CONTEXT_WINDOW_EXCEEDED /
-   SERVER / TRANSPORT …) with `retry-after` and `x-request-id` support, plus a
-   stream idle watchdog.
+   (zai/deepseek/minimax/… before aggregators), so `glm-5.2-highspeed`
+   normalizes to `glm-5.2` but keeps a distinct display name.
+7. **Release-date sorting** — the picker orders models newest-first by
+   models.dev `release_date` (unknown dates sort first); opt out with
+   `sortModelsByRelease: false`.
+8. **Operational hygiene** — model lists are TTL-cached and lazily refreshed;
+   non-chat models are excluded from the picker by default (`excludePatterns`);
+   HTTP errors are mapped to stable harness codes with `retry-after` support.
 
 ## Layout
 
 ```
 dsh-newapi-provider/
-├── index.js            # plugin entry: Config validation, provider registration, settings/credentials wiring
+├── index.js            # plugin entry: multi-gateway Config, provider registration, settings/credentials
 ├── cordis.patch.yml    # dsh.bundle patch (makes the package installable via `dsh plugin add`)
 ├── lib/
-│   ├── catalog.js      # gateway model discovery + models.dev merge + TTL cache + picker filter
+│   ├── gateways.js     # protocol URL templates (newapi/litellm/openai-compatible) + endpoint selection
+│   ├── catalog.js      # gateway model discovery + models.dev merge + model override/custom + TTL cache
 │   ├── modelsdev.js    # models.dev fetch / fuzzy key match / parameter extraction
-│   ├── wire.js         # endpoint selection + per-format URL assembly
-│   ├── serialize.js    # harness messages → openai / anthropic / gemini request bodies
-│   ├── translate.js    # three wire formats' SSE → harness StreamChunk
+│   ├── thinking.js     # pi-ai thinking levels + variant normalization (baseModelId/variantLabel/findPiModel)
+│   ├── wire.js         # endpoint selection + URL assembly (backwards-compat, delegates to gateways.js)
+│   ├── serialize.js    # harness messages → openai/openai-response/anthropic/gemini request bodies
+│   ├── translate.js    # wire formats' SSE → harness StreamChunk
 │   ├── sse.js          # zero-dependency SSE parser
-│   └── adapter.js      # NewapiAdapter (LlmAdapter subclass)
+│   ├── adapter.js      # NewapiAdapter (multi-gateway, resolves connection per provider)
+│   └── client.js       # client half: self-built "Gateway Models" settings page (settings.section)
 ├── test/smoke.mjs      # standalone integration smoke tests against a live gateway
 └── scripts/link.sh     # link the harness profile node_modules (single-instance safety)
 ```
@@ -166,13 +164,47 @@ are edited in the `llm-newapi:` section of `$DSH_HOME/settings.yaml`.
 | `streamIdleTimeoutMs` | `300000` | Stream idle watchdog |
 | `retryPolicy` | standard | Same shape as `llm-deepseek` |
 
-Example:
+Example (single gateway, backwards compatible):
 
 ```yaml
 llm-newapi:
   baseURL: https://your-newapi-instance.com
+  flavor: newapi
   endpointPriority: [openai, anthropic, gemini]
   excludePatterns: ["(^|/|-)image", "(^|/|-)speech"]
+```
+
+Multiple gateways + model-level overrides:
+
+```yaml
+llm-newapi:
+  baseURL: https://your-newapi-instance.com
+  flavor: newapi
+  # Model-level overrides for the default gateway (hide / override / custom-add)
+  models:
+    - id: glm-5.2
+      disabled: true              # hide from picker
+    - id: glm-5.2-highspeed
+      contextWindow: 1000000      # override context
+      protocol: openai            # force protocol
+    - id: my-internal-model       # custom model the gateway does not list
+      name: My Internal Model
+      contextWindow: 200000
+  # Additional gateways: each becomes a gateway:<id> route
+  gateways:
+    - id: litellm-prod
+      label: LiteLLM Prod
+      baseURL: https://litellm.example.com
+      apiKeyEnv: LITELLM_API_KEY
+      flavor: litellm
+      protocolPaths:
+        anthropic: /v1/messages   # per-protocol path override
+    - id: custom-gw
+      label: Custom Gateway
+      baseURL: https://custom.example.com
+      apiKeyEnv: CUSTOM_API_KEY
+      protocolPaths:
+        openai: /api/chat         # custom openai path
 ```
 
 ## Testing
