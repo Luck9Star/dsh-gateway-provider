@@ -16,7 +16,8 @@
   ],
   "scripts": {
     "link": "bash scripts/link.sh",
-    "smoke": "node test/smoke.mjs"
+    "smoke": "node test/smoke.mjs",
+    "test:client": "node test/client-render.mjs"
   },
   "keywords": [
     "deepseek-harness",

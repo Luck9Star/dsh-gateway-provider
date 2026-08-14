@@ -28,9 +28,15 @@ everything is discovered and driven automatically:
    reasoning levels, and release dates are real instead of one-size-fits-all.
 5. **Per-model toggle / override / custom-add** — a self-built "Gateway Models"
    settings page (independent of the shipped Models page, which only knows
-   `llm-deepseek`/`llm-pi-ai`) lets you hide/show each model, override its
-   context/maxTokens/protocol, and add custom internal-test models the gateway
-   does not list. It reads/writes through the forwarded settings + llm APIs.
+   `llm-deepseek`/`llm-pi-ai`) with:
+   - gateway config forms prefilled from current values, dirty tracking,
+     http(s) URL validation, and clear-means-inherit semantics (label /
+     apiKeyEnv / flavor / catalogMode per gateway);
+   - a per-model override editor (display name, protocol, context window,
+     output cap, reasoning levels) with discovered values as placeholders
+     (`128K`-formatted hints) and save/cancel instead of write-on-keystroke;
+   - model search + hidden/custom filters with counts, custom-model add &
+     delete, connection test, and a "synced N models" feedback badge.
 6. **Thinking levels from the harness's own model directory** — the reasoning
    selector reuses DeepSeek Harness's pi-ai model catalog: each model carries
    `reasoning` + a `thinkingLevelMap`, and selectable levels are computed with
@@ -159,6 +165,7 @@ content hash); host-half edits need a profile restart.
 
 | Field | Default | Description |
 |-------|---------|-------------|
+| `label` | `NewAPI` | Display name of the default gateway route (editable in the settings UI) |
 | `apiKeyEnv` | `NEWAPI_API_KEY` | Credential reference (environment variable name) |
 | `baseURL` | env `NEWAPI_BASE_URL` / `NEWAPI_API_URL` → `https://api.newapi.ai` | Gateway base URL |
 | `modelsUrl` | `https://models.dev/models.json` | models.dev source (file: URLs work offline) |

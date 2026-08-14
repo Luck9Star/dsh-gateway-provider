@@ -23,8 +23,14 @@
    参数（`limit.context` / `limit.output` / `reasoning` / `family` / `release_date`）
    自动补齐每个模型的 context window、输出上限、推理等级、发布日期；缺失时回退到配置默认值。
 5. **模型级开关 / 覆写 / 自定义添加** — 通过自建的"网关模型"设置页（独立于官方
-   Models 页），可逐模型：隐藏/显示、覆写 context/maxTokens/协议、添加网关未列出的
-   自定义内测模型。设置页通过转发的 settings/llm API 读写，无需额外 RPC。
+   Models 页）提供：
+   - 网关配置表单：回填当前值、脏检查、http(s) URL 校验、清空即继承语义
+     （label / apiKeyEnv / flavor / catalogMode 均可按网关覆盖）；
+   - 逐模型覆写编辑器（显示名 / 协议 / 上下文窗口 / 输出上限 / 思考级别），
+     以发现值作 placeholder（`128K` 格式提示），保存/取消而非逐键写盘；
+   - 模型搜索 + 已隐藏/自定义筛选（带计数）、自定义模型添加与删除、
+     连接测试与"已同步 N 个模型"反馈。
+   设置页通过转发的 settings/llm API 读写，无需额外 RPC。
 6. **思考级别直接引用 harness 官方模型目录（pi-ai）** — 推理等级选择器复用
    pi-ai 模型目录：每个模型条目带 `reasoning` 与 `thinkingLevelMap`，可选级别用
    pi-ai 的 `getSupportedThinkingLevels` 计算。网关 id 先归一化（去 `provider/`
@@ -140,6 +146,7 @@ profile。
 
 | 字段 | 默认 | 说明 |
 |------|------|------|
+| `label` | `NewAPI` | 默认网关路由的显示名（设置页可改） |
 | `apiKeyEnv` | `NEWAPI_API_KEY` | 凭据引用（环境变量名） |
 | `baseURL` | env `NEWAPI_BASE_URL` / `NEWAPI_API_URL` → `https://api.newapi.ai` | 网关地址 |
 | `modelsUrl` | `https://models.dev/models.json` | models.dev 数据源（file: URL 可离线） |

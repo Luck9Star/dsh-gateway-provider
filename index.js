@@ -103,6 +103,8 @@ const GatewaySchema = z.object({
 
 export const Config = z.object({
   // ---- Legacy single-connection fields (build the default `newapi` route) ----
+  /** Display name of the default gateway route (defaults to "NewAPI"). */
+  label: z.string(),
   /** Environment-variable name (credential ref) holding the default gateway API key. */
   apiKeyEnv: z.string().role("credential-ref").default(DEFAULT_API_KEY_ENV),
   /** Default gateway base URL; resolved from NEWAPI_BASE_URL / NEWAPI_API_URL then the public cloud default. */
