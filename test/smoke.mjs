@@ -47,11 +47,14 @@ if (!BASE_URL || !API_KEY) {
 }
 
 function makeAdapter(overrides = {}) {
-  const options = () => ({
+  const baseOptions = () => ({
     apiKeyEnv: "NEWAPI_API_KEY",
     baseURL: BASE_URL.replace(/\/+$/, ""),
+    flavor: "newapi",
     modelsUrl: env.NEWAPI_MODELS_URL ?? "https://models.dev/models.json",
     useModelsDev: true,
+    extendedReasoningLevels: false,
+    sortModelsByRelease: true,
     catalogMode: "auto",
     catalogTtlMs: 30 * 60 * 1000,
     includeChatOnly: true,
@@ -62,14 +65,20 @@ function makeAdapter(overrides = {}) {
     ],
     endpointPriority: ["openai", "anthropic", "gemini"],
     userId: "1",
+    modelOverrides: {},
+    protocolPaths: {},
     maxTokens: 32768,
     defaultContextWindow: 128000,
     streamIdleTimeoutMs: 300_000,
     retryPolicy: { mode: "normal", maxRetries: 0, retryableCodes: ["RATE_LIMIT"], backoff: { initialDelayMs: 500, maxDelayMs: 2000, jitterRatio: 0.1 } },
     ...overrides,
   });
+  // The adapter resolves one connection per provider route; the test gateway
+  // is the default `newapi` route, so every route shares the same connection.
+  const options = (_provider) => baseOptions();
+  const providerInfo = (provider) => ({ id: provider, name: "NewAPI" });
   const resolveApiKey = async () => API_KEY;
-  return new NewapiAdapter({ options, resolveApiKey });
+  return new NewapiAdapter({ options, resolveApiKey, providerInfo });
 }
 
 const PROVIDER = "newapi";
