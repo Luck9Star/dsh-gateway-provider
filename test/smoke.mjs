@@ -139,6 +139,14 @@ async function testCatalog() {
   check("embedding-ish unknown model keeps provider-native reasoning", (await adapter.resolveModel(PROVIDER, "some-unknown-model-xyz")).reasoning === undefined);
   const unknown = await adapter.resolveModel(PROVIDER, "not-a-real-model-xyz");
   check("unlisted model resolves with configured defaults", unknown.context?.contextWindow === 128000, `context=${unknown.context?.contextWindow}`);
+  // Regression: a per-model contextWindow/maxTokens override must reach
+  // resolveModel — the harness reads resolveModel.context.contextWindow for
+  // context compaction, so a missing override silently compacts on the wrong
+  // window (reported for glm-5.3 configured with contextWindow 1000000).
+  const overridden = makeAdapter({ modelOverrides: { "glm-5.3": { contextWindow: 1_000_000, maxTokens: 131_072 } } });
+  const glmResolved = await overridden.resolveModel(PROVIDER, "glm-5.3");
+  check("glm-5.3 contextWindow override reaches resolveModel", glmResolved.context?.contextWindow === 1_000_000, `context=${glmResolved.context?.contextWindow}`);
+  check("glm-5.3 maxTokens override reaches resolveModel", glmResolved.defaultMaxTokens === 131_072, `maxTokens=${glmResolved.defaultMaxTokens}`);
 }
 
 async function testOpenAIChat(model, label) {
