@@ -1,5 +1,7 @@
 # dsh-gateway-provider
 
+[![gitleaks](https://github.com/Luck9Star/dsh-gateway-provider/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/Luck9Star/dsh-gateway-provider/actions/workflows/gitleaks.yml)
+
 > English: [README.md](README.md)
 
 **通用 LLM 网关 Provider 插件** — 为 DeepSeek Harness 的 LLM 适配层

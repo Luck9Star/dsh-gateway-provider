@@ -1,5 +1,7 @@
 # dsh-gateway-provider
 
+[![gitleaks](https://github.com/Luck9Star/dsh-gateway-provider/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/Luck9Star/dsh-gateway-provider/actions/workflows/gitleaks.yml)
+
 > 中文文档：[README.zh.md](README.zh.md)
 
 **Generic LLM gateway model provider plugin for DeepSeek Harness** — registers
