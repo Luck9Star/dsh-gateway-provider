@@ -21,20 +21,20 @@ discovered and driven automatically:
    - `openai` → `POST {base}/v1/chat/completions`
    - `anthropic` → `POST {base}/v1/messages`
    - `gemini` → `POST {base}/v1beta/models/{model}:streamGenerateContent?alt=sse`
-4. **Automatic reasoning control** — the harness reasoning-level selector is
-   inferred from models.dev (`reasoning: true`) and mapped per model family ×
-   wire format:
-   - **DeepSeek family** (OpenAI route) → `thinking: {type: enabled|disabled}`
-     + `reasoning_effort` (Off / High / Max);
-   - **MiniMax family** (OpenAI route) → `thinking: {type: adaptive|disabled}`
-     (MiniMax rejects `enabled`; Off disables thinking, High/Max use adaptive);
-   - **all other reasoning models** (GPT / GLM / Kimi / Gemini / Claude / …) →
-     OpenAI-style `reasoning_effort: low|medium|high` on the OpenAI route,
-     Anthropic `thinking` + `budget_tokens` on the Messages route, and Gemini
-     `thinkingConfig.thinkingBudget` on the generateContent route. `off` always
-     means "keep the provider-native default".
-   Models without `reasoning: true` keep provider-native defaults and expose no
-   selector.
+4. **Thinking levels from the harness's own model directory** — the reasoning
+   selector reuses DeepSeek Harness's pi-ai model catalog (the library behind
+   the official `llm-pi-ai` adapter, installed with every deployment): each
+   model's entry carries `reasoning` + a `thinkingLevelMap` spelling the
+   provider-native wire value per thinking level, and the selectable levels
+   are computed with pi-ai's own `getSupportedThinkingLevels` (`off` /
+   `minimal` / `low` / `medium` / `high` / `xhigh` / `max`, with the catalog's
+   per-level support matrix — e.g. GLM-5.2 declares `off` unsupported,
+   GPT-5.5 exposes `xhigh`, Kimi K2.6 sends `thinking` only). Wire serialization
+   mirrors pi-ai's openai-completions dispatch (`thinkingFormat === "deepseek"`
+   → `thinking` + `reasoning_effort`, otherwise OpenAI-style `reasoning_effort`
+   mapped through `thinkingLevelMap`); MiniMax keeps the gateway-verified
+   `thinking: {type: adaptive|disabled}`. Models the catalog misses fall back
+   to models.dev inference (`reasoning: true` + family).
 5. **Operational hygiene** — model list is TTL-cached and lazily refreshed;
    non-chat models (image / speech / embedding / rerank / …) are excluded from
    the picker by default (`excludePatterns`); HTTP errors are mapped to stable

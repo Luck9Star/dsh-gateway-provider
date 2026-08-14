@@ -17,17 +17,18 @@
    - `openai` → `POST {base}/v1/chat/completions`
    - `anthropic` → `POST {base}/v1/messages`
    - `gemini` → `POST {base}/v1beta/models/{model}:streamGenerateContent?alt=sse`
-4. **推理等级自动推断与映射** — 推理等级选择器由 models.dev（`reasoning: true`）
-   自动推断，并按模型家族 × wire 格式映射：
-   - **DeepSeek 系**（OpenAI 路由）→ `thinking: {type: enabled|disabled}` +
-     `reasoning_effort`（Off / High / Max）；
-   - **MiniMax 系**（OpenAI 路由）→ `thinking: {type: adaptive|disabled}`
-     （MiniMax 拒绝 `enabled`；Off 关闭思考，High/Max 用原生 adaptive）；
-   - **其余推理模型**（GPT / GLM / Kimi / Gemini / Claude 等）→ OpenAI 路由发
-     OpenAI 风格 `reasoning_effort: low|medium|high`；Messages 路由发 Anthropic
-     `thinking` + `budget_tokens`；generateContent 路由发
-     `thinkingConfig.thinkingBudget`。`off` 一律表示"保持提供方原生默认"。
-   未声明 `reasoning: true` 的模型保持提供方原生默认，不显示推理等级。
+4. **思考级别直接引用 harness 官方模型目录（pi-ai）** — 推理等级选择器不再
+   机械推导，而是复用 DeepSeek Harness 自带的 pi-ai 模型目录（官方
+   `llm-pi-ai` 适配器的底层库，随发行版安装）：每个模型条目带 `reasoning`
+   与 `thinkingLevelMap`（逐思考级别声明提供方原生 wire 值），可选级别用
+   pi-ai 的 `getSupportedThinkingLevels` 计算（`off` / `minimal` / `low` /
+   `medium` / `high` / `xhigh` / `max`，含目录级的支持矩阵——例如 GLM-5.2
+   声明不支持 off、GPT-5.5 暴露 xhigh、Kimi K2.6 只发 thinking）。wire
+   序列化照搬 pi-ai 的 openai-completions 分发（`thinkingFormat ===
+   "deepseek"` → `thinking` + `reasoning_effort`，其余模型走 OpenAI 风格
+   `reasoning_effort` 并经 `thinkingLevelMap` 映射）；MiniMax 保留网关实测
+   的 `thinking: {type: adaptive|disabled}`。目录未收录的模型回退到
+   models.dev 推断（`reasoning: true` + 家族）。
 5. **自动化治理** — 模型列表按 TTL 缓存、惰性刷新；image/speech/embedding 等
    非对话模型默认从选择器剔除（`excludePatterns`）；HTTP 错误统一映射
    （AUTH / RATE_LIMIT / QUOTA_EXCEEDED / CONTEXT_WINDOW_EXCEEDED / SERVER /

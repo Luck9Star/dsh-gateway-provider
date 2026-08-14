@@ -30,7 +30,8 @@
     "anthropic",
     "gemini",
     "models.dev",
-    "dsh-plugin"
+    "dsh-plugin",
+    "pi-ai"
   ],
   "license": "MIT",
   "dsh": {
@@ -47,6 +48,7 @@
     "@deepseek-ai/dsh-llm": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-settings": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-timeout": "^0.1.0-rc.6",
-    "@deepseek-ai/schemastery": "^3.18.1"
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "@earendil-works/pi-ai": "^0.82.1"
   }
 }
