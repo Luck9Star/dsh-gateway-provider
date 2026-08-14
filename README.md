@@ -1,5 +1,7 @@
 # dsh-newapi-provider
 
+> 中文文档：[README.zh.md](README.zh.md)
+
 **NewAPI (new-api gateway) model provider plugin for DeepSeek Harness** — registers
 a `newapi` provider route on the harness LLM seam (`ctx.llm`). Pure ESM, zero
 runtime dependencies (`fetch` only). No static model list — everything is

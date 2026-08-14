@@ -1,5 +1,7 @@
 # dsh-newapi-provider
 
+> English: [README.md](README.md)
+
 **NewAPI（new-api 网关）模型 Provider 插件** — 为 DeepSeek Harness 的 LLM 适配层
 (`ctx.llm`) 注册 `newapi` provider 路由。纯 ESM、零运行时依赖（仅 `fetch`）。
 无静态模型清单——一切自动发现、自动驱动：
