@@ -32,9 +32,8 @@ import { launchEnvironmentOf } from "@deepseek-ai/dsh-launch-environment";
 import { deepEqualJson, installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
 import { MAX_TIMER_DELAY_MS } from "@deepseek-ai/dsh-timeout";
 import { NewapiAdapter } from "./lib/adapter.js";
-import { DEFAULT_EXCLUDE_PATTERNS } from "./lib/catalog.js";
-import { DEFAULT_ENDPOINT_PRIORITY } from "./lib/wire.js";
-import { GATEWAY_FLAVORS, KNOWN_PROTOCOLS } from "./lib/gateways.js";
+import { DEFAULT_EXCLUDE_PATTERNS, DEFAULT_MAX_TOKENS, DEFAULT_CONTEXT_WINDOW } from "./lib/catalog.js";
+import { DEFAULT_ENDPOINT_PRIORITY } from "./lib/pi-provider.js";
 
 export const name = "llm-newapi";
 export const inject = ["llm"];
@@ -55,8 +54,6 @@ export const DEFAULT_MODELS_URL = "https://models.dev/models.json";
 
 const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000;
 const DEFAULT_CATALOG_TTL_MS = 30 * 60 * 1000;
-const DEFAULT_CONTEXT_WINDOW = 128_000;
-const DEFAULT_MAX_TOKENS = 32_768;
 
 /** Schema for one model-level override on a gateway (all fields optional). */
 const ModelOverrideSchema = z.object({
@@ -67,7 +64,7 @@ const ModelOverrideSchema = z.object({
   /** Hide this model from the picker. */
   disabled: z.boolean(),
   /** Force the wire protocol for this model (openai/anthropic/gemini/…). */
-  protocol: z.union(KNOWN_PROTOCOLS),
+  protocol: z.union(["openai","openai-response","anthropic","gemini"]),
   /** Override the context window. */
   contextWindow: z.number().step(1).min(1),
   /** Override the output-token cap. */
@@ -90,9 +87,7 @@ const GatewaySchema = z.object({
   /** Environment-variable name (credential ref) holding the API key. */
   apiKeyEnv: z.string().role("credential-ref"),
   /** Gateway flavor: a built-in name. */
-  flavor: z.union(Object.keys(GATEWAY_FLAVORS)),
-  /** Per-protocol path overrides (e.g. { anthropic: "/v1/messages" }). */
-  protocolPaths: z.dict(z.string(), z.string()),
+  flavor: z.union(["newapi","litellm","openai-compatible"]),
   /** Model-list source: `auto` (prefer /v1/models), `v1`, or `management`. */
   catalogMode: z.union(["auto", "v1", "management"]),
   /** User id sent to the management API when it is used. */
@@ -110,7 +105,7 @@ export const Config = z.object({
   /** Default gateway base URL; resolved from NEWAPI_BASE_URL / NEWAPI_API_URL then the public cloud default. */
   baseURL: z.string(),
   /** Default gateway flavor. */
-  flavor: z.union([...Object.keys(GATEWAY_FLAVORS)]).default("newapi"),
+  flavor: z.union(["newapi","litellm","openai-compatible"]).default("newapi"),
   /** models.dev catalog URL (any fetch-able URL; file: works for offline mirrors). */
   modelsUrl: z.string().default(DEFAULT_MODELS_URL),
   /** Enrich gateway models with models.dev parameters. */
@@ -139,8 +134,6 @@ export const Config = z.object({
   retryPolicy: RetryPolicySchema,
   /** Per-model overrides for the default (legacy) gateway. */
   models: z.array(ModelOverrideSchema).default([]),
-  /** Per-protocol path overrides for the default (legacy) gateway. */
-  protocolPaths: z.dict(z.string(), z.string()),
   // ---- Additional gateways ----
   /** Additional gateways; each becomes a `gateway:<id>` provider route. */
   gateways: z.array(GatewaySchema).default([]),
@@ -150,14 +143,15 @@ export const Config = z.object({
  * Normalize one gateway entry into the connection facts the adapter needs.
  * Per-gateway fields fall back to the shared defaults.
  */
-function gatewayConnection(gw, defaults) {
+function gatewayConnection(gw, defaults, provider, label) {
   const apiKeyEnv = gw.apiKeyEnv ?? defaults.apiKeyEnv;
   const flavor = gw.flavor ?? defaults.flavor ?? "openai-compatible";
   return {
+    providerId: provider,
+    displayName: label,
     apiKeyEnv: typeof apiKeyEnv === "string" ? credentialRef(apiKeyEnv) : defaults.apiKeyEnv,
     baseURL: gw.baseURL ?? defaults.baseURL,
     flavor,
-    protocolPaths: gw.protocolPaths ?? defaults.protocolPaths,
     modelsUrl: defaults.modelsUrl,
     useModelsDev: defaults.useModelsDev,
     extendedReasoningLevels: defaults.extendedReasoningLevels,
@@ -169,6 +163,7 @@ function gatewayConnection(gw, defaults) {
     endpointPriority: gw.endpointPriority ?? defaults.endpointPriority,
     userId: gw.userId ?? defaults.userId,
     modelOverrides: indexModelOverrides(gw.models ?? []),
+    headers: defaults.headers,
     maxTokens: defaults.maxTokens,
     defaultContextWindow: defaults.defaultContextWindow,
     streamIdleTimeoutMs: defaults.streamIdleTimeoutMs,
@@ -205,7 +200,6 @@ export function resolveGateways(config, environment) {
     apiKeyEnv: credentialRef(config.apiKeyEnv ?? DEFAULT_API_KEY_ENV),
     baseURL: baseURL.replace(/\/+$/, ""),
     flavor: config.flavor ?? "newapi",
-    protocolPaths: config.protocolPaths ?? {},
     modelsUrl: config.modelsUrl ?? DEFAULT_MODELS_URL,
     useModelsDev: config.useModelsDev ?? true,
     extendedReasoningLevels: config.extendedReasoningLevels ?? false,
@@ -216,25 +210,29 @@ export function resolveGateways(config, environment) {
     excludePatterns: config.excludePatterns ?? DEFAULT_EXCLUDE_PATTERNS,
     endpointPriority: config.endpointPriority ?? DEFAULT_ENDPOINT_PRIORITY,
     userId: config.userId ?? "1",
+    headers: config.headers,
     maxTokens: config.maxTokens ?? DEFAULT_MAX_TOKENS,
     defaultContextWindow: config.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW,
     streamIdleTimeoutMs: config.streamIdleTimeoutMs ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS,
     retryPolicy: resolveRetryPolicy(config.retryPolicy, "llm-newapi: retryPolicy"),
   };
   // The legacy `newapi` route is always the first gateway, built from flat fields.
+  const defaultLabel = config.label ?? "NewAPI";
   const gateways = [
-    { provider: PROVIDER, id: "default", label: config.label ?? "NewAPI", connection: gatewayConnection({ baseURL: defaults.baseURL, models: config.models ?? [] }, defaults) },
+    { provider: PROVIDER, id: "default", label: defaultLabel, connection: gatewayConnection({ baseURL: defaults.baseURL, models: config.models ?? [] }, defaults, PROVIDER, defaultLabel) },
   ];
   // Additional gateways from the array.
   for (const gw of config.gateways ?? []) {
     const id = routeIdOf(gw.id);
     if (id.length === 0) continue;
     if (gw.baseURL === undefined || gw.baseURL.length === 0) continue;
+    const provider = `${GATEWAY_PREFIX}${id}`;
+    const label = gw.label ?? provider;
     gateways.push({
-      provider: `${GATEWAY_PREFIX}${id}`,
+      provider,
       id,
-      label: gw.label ?? `${GATEWAY_PREFIX}${id}`,
-      connection: gatewayConnection(gw, defaults),
+      label,
+      connection: gatewayConnection(gw, defaults, provider, label),
     });
   }
   return gateways;
@@ -290,7 +288,13 @@ export function apply(ctx, config) {
     );
   };
 
-  const adapter = new NewapiAdapter({ options, resolveApiKey, providerInfo });
+  const adapter = new NewapiAdapter({
+    options,
+    resolveApiKey,
+    providerInfo,
+    providerCache: new Map(),
+    resolveAttachments: () => ctx.get("attachments"),
+  });
 
   /** Re-register the directory + adapter whenever the gateway list changes. */
   let directory = undefined;
