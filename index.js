@@ -12,11 +12,11 @@
  *   management `/api/user/models`), including each model's
  *   `supported_endpoint_types`;
  * - enriches every model with models.dev parameters (context window, output
- *   cap, reasoning, family, release date);
+ *   cap, reasoning, family, release date, input modalities);
  * - picks each model's wire protocol from its advertised endpoint types (or an
- *   explicit per-model override) and assembles the URL from the gateway's
- *   protocol-path map (built-in newapi/litellm/openai-compatible flavors, or a
- *   custom one).
+ *   explicit per-model override) and dispatches through the pi-ai SDK's
+ *   protocol layer (openai-completions / openai-responses / anthropic-messages
+ *   / google-generative-ai).
  *
  * Per model (in the gateway config) the user can: disable it (hide from
  * picker), override its context/maxTokens/reasoning, force a protocol, or add a
@@ -86,7 +86,7 @@ const GatewaySchema = z.object({
   baseURL: z.string().required(),
   /** Environment-variable name (credential ref) holding the API key. */
   apiKeyEnv: z.string().role("credential-ref"),
-  /** Gateway flavor: a built-in name. */
+  /** Gateway type label (informational only — protocol dispatch is driven by each model's `supported_endpoint_types` via the pi-ai SDK). */
   flavor: z.union(["newapi","litellm","openai-compatible"]),
   /** Model-list source: `auto` (prefer /v1/models), `v1`, or `management`. */
   catalogMode: z.union(["auto", "v1", "management"]),
@@ -104,7 +104,7 @@ export const Config = z.object({
   apiKeyEnv: z.string().role("credential-ref").default(DEFAULT_API_KEY_ENV),
   /** Default gateway base URL; resolved from NEWAPI_BASE_URL / NEWAPI_API_URL then the public cloud default. */
   baseURL: z.string(),
-  /** Default gateway flavor. */
+  /** Gateway type label shown in the UI (informational; does not affect protocol dispatch). */
   flavor: z.union(["newapi","litellm","openai-compatible"]).default("newapi"),
   /** models.dev catalog URL (any fetch-able URL; file: works for offline mirrors). */
   modelsUrl: z.string().default(DEFAULT_MODELS_URL),
