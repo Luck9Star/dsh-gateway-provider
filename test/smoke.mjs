@@ -2,8 +2,8 @@
  * Standalone smoke test for the NewAPI provider adapter.
  *
  * Drives the REAL adapter code (catalog discovery → models.dev enrichment →
- * per-model endpoint selection → wire serialization → SSE translation)
- * against the live gateway configured in:
+ * pi-ai Provider construction → pi-ai protocol dispatch → StreamChunk
+ * translation) against the live gateway configured in:
  *   1. $NEWAPI_API_KEY / $NEWAPI_BASE_URL environment variables, else
  *   2. ../dsh-newapi/.env (API_KEY / API_URL / NEWAPI_ACCESS_TOKEN) — the
  *      local newapi skill checkout.
@@ -48,6 +48,8 @@ if (!BASE_URL || !API_KEY) {
 
 function makeAdapter(overrides = {}) {
   const baseOptions = () => ({
+    providerId: "newapi",
+    displayName: "NewAPI",
     apiKeyEnv: "NEWAPI_API_KEY",
     baseURL: BASE_URL.replace(/\/+$/, ""),
     flavor: "newapi",
@@ -63,10 +65,10 @@ function makeAdapter(overrides = {}) {
       "(^|/|-)embed", "(^|/|-)rerank", "(^|/)bge-", "(^|/)text-embedding",
       "(^|/|-)moderation", "(^|/|-)tts", "(^|/|-)stt", "(^|/|-)whisper",
     ],
-    endpointPriority: ["openai", "anthropic", "gemini"],
+    endpointPriority: ["openai-response", "anthropic", "openai", "gemini"],
     userId: "1",
     modelOverrides: {},
-    protocolPaths: {},
+    headers: {},
     maxTokens: 32768,
     defaultContextWindow: 128000,
     streamIdleTimeoutMs: 300_000,
@@ -78,7 +80,7 @@ function makeAdapter(overrides = {}) {
   const options = (_provider) => baseOptions();
   const providerInfo = (provider) => ({ id: provider, name: "NewAPI" });
   const resolveApiKey = async () => API_KEY;
-  return new NewapiAdapter({ options, resolveApiKey, providerInfo });
+  return new NewapiAdapter({ options, resolveApiKey, providerInfo, providerCache: new Map(), resolveAttachments: () => undefined });
 }
 
 const PROVIDER = "newapi";

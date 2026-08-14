@@ -5,18 +5,19 @@
 **Generic LLM gateway model provider plugin for DeepSeek Harness** — registers
 one or more gateway provider routes (the default `newapi` route plus optional
 `gateway:<id>` routes) on the harness LLM seam (`ctx.llm`). Supports newapi /
-LiteLLM / any OpenAI-compatible gateway. Pure ESM, zero runtime dependencies
-(`fetch` only). No static model list — everything is discovered and driven
-automatically:
+LiteLLM / any OpenAI-compatible gateway. Pure ESM. No static model list —
+everything is discovered and driven automatically:
 
 1. **Multiple gateways at once** — the legacy single-connection fields
    (`baseURL` / `apiKeyEnv` / …) always seed the default `newapi` route (fully
    backwards compatible); the new `gateways` array mounts more gateways, each
    becoming its own `gateway:<id>` provider route with an independent catalog cache.
-2. **Gateway-level protocol + model-level override** — each gateway's `flavor`
-   (`newapi` / `litellm` / `openai-compatible`) sets the default request-protocol
-   URL templates; `protocolPaths` overrides per-protocol paths; an individual
-   model can force its protocol with `protocol`.
+2. **Per-model wire protocol via pi-ai SDK** — each model's
+   `supported_endpoint_types` (advertised by the gateway) are mapped to pi-ai
+   API identifiers (`openai-completions` / `openai-responses` /
+   `anthropic-messages` / `google-generative-ai`) and dispatched through the
+   official `@earendil-works/pi-ai` protocol layer. No hand-written SSE or
+   request-body serialization — the SDK speaks every wire format natively.
 3. **Automatic model discovery** — pulls the live model list from each gateway:
    - Primary: `GET {base}/v1/models` (OpenAI-compatible; every entry carries
      `supported_endpoint_types` — the per-model supported request formats);
@@ -45,22 +46,44 @@ automatically:
    non-chat models are excluded from the picker by default (`excludePatterns`);
    HTTP errors are mapped to stable harness codes with `retry-after` support.
 
+## Architecture: pi-ai protocol layer
+
+The adapter delegates all wire-format concerns to `@earendil-works/pi-ai`
+(the same SDK the official `dsh-llm-pi-ai` adapter uses). The conversion
+chain on each request is:
+
+```
+harness GenerateOptions
+  → toPiContext()         (lib/pi-bridge.js — harness messages → pi-ai Context)
+  → models.streamSimple()  (pi-ai SDK — dispatches by model.api)
+  → toStreamChunks()       (lib/pi-bridge.js — pi-ai events → harness chunks)
+```
+
+Each discovered model is built with a `buildModel()` that stamps its `api`
+field from the gateway's advertised `supported_endpoint_types`, honoring the
+configured `endpointPriority`. The pi-ai `createProvider()` receives an `api`
+**map** (not a single factory) so each model routes to its own protocol
+implementation — OpenAI Responses models through `openai-responses`,
+Anthropic models through `anthropic-messages`, etc.
+
+The `sdkBaseURL()` helper appends `/v1` for OpenAI-protocol models (the
+OpenAI Node SDK expects `/v1` in `baseURL` and appends `/responses` itself)
+while leaving Anthropic/Google baseURLs unchanged (those SDKs build their own
+full paths).
+
 ## Layout
 
 ```
 dsh-newapi-provider/
 ├── index.js            # plugin entry: multi-gateway Config, provider registration, settings/credentials
-├── cordis.patch.yml    # dsh.bundle patch (makes the package installable via `dsh plugin add`)
+├── cordis.patch.yml    # dsh.bundle patch (auto-mounts via `dsh plugin add` or link dependency)
 ├── lib/
-│   ├── gateways.js     # protocol URL templates (newapi/litellm/openai-compatible) + endpoint selection
+│   ├── adapter.js      # NewapiAdapter: pi-ai-backed LlmAdapter (multi-gateway, per-provider connection)
+│   ├── pi-provider.js  # gateway → pi-ai Provider: buildModel / buildProvider / pickModelApi / sdkBaseURL
+│   ├── pi-bridge.js    # harness ↔ pi-ai conversion: toPiContext / toStreamChunks / mapStopReason / replay
 │   ├── catalog.js      # gateway model discovery + models.dev merge + model override/custom + TTL cache
 │   ├── modelsdev.js    # models.dev fetch / fuzzy key match / parameter extraction
 │   ├── thinking.js     # pi-ai thinking levels + variant normalization (baseModelId/variantLabel/findPiModel)
-│   ├── wire.js         # endpoint selection + URL assembly (backwards-compat, delegates to gateways.js)
-│   ├── serialize.js    # harness messages → openai/openai-response/anthropic/gemini request bodies
-│   ├── translate.js    # wire formats' SSE → harness StreamChunk
-│   ├── sse.js          # zero-dependency SSE parser
-│   ├── adapter.js      # NewapiAdapter (multi-gateway, resolves connection per provider)
 │   └── client.js       # client half: self-built "Gateway Models" settings page (settings.section)
 ├── test/smoke.mjs      # standalone integration smoke tests against a live gateway
 └── scripts/link.sh     # link the harness profile node_modules (single-instance safety)
@@ -78,6 +101,10 @@ stack the standard way:
 dsh plugin --profile web add dsh-newapi-provider
 ```
 
+The `dsh.bundle.patch` field in `package.json` points to `cordis.patch.yml`,
+which inserts the `id: llm-newapi` loader row at the **bundle layer** — dsh
+reads it at boot, so no manual `cordis.patch.yml` editing is needed.
+
 Then:
 
 1. **Credential** — store the gateway key in `$DSH_HOME/.credentials.yaml`
@@ -93,17 +120,16 @@ Then:
    then `NEWAPI_BASE_URL` / `NEWAPI_API_URL` environment, then the public
    default `https://api.newapi.ai`.
 
-3. Restart the profile (bundles are read at boot) and open **Settings → Models**:
-   the **NewAPI (newapi)** provider appears, and every chat-capable gateway
+3. Restart the profile (bundles are read at boot) and open **Settings →
+   Gateway Models**: the provider appears, and every chat-capable gateway
    model (with models.dev parameters) becomes selectable.
 
 ### Local checkout (install by package name)
 
 Mount the checkout the way every working third-party plugin on this machine is
-mounted — as a **package-name** row. dsh resolves a row's client half (the
-"Gateway Models" settings section) via `require.resolve('<name>/package.json')`
-from the profile directory; a raw-path row can only contribute the host half,
-so the settings UI silently never appears, no matter how often you restart.
+mounted — as a **package-name** link dependency. The bundle's own
+`cordis.patch.yml` handles the loader-row insert at the bundle layer, so you
+only need to register the dependency.
 
 1. `bash scripts/link.sh` — symlinks this package's `node_modules` to the
    profile's, so bare `@deepseek-ai/*` imports resolve to the exact module
@@ -114,53 +140,20 @@ so the settings UI silently never appears, no matter how often you restart.
    cd "$DSH_HOME/profiles/web"
    # add to package.json dependencies:
    #   "dsh-newapi-provider": "link:/absolute/path/to/dsh-newapi-provider"
+   # then add "dsh-newapi-provider" to the bundles list in the same file
    pnpm install
    ```
 
-3. Mount the row in `$DSH_HOME/profiles/<profile>/cordis.patch.yml` by package
-   name:
+3. Restart the profile. The bundle layer auto-inserts the `id: llm-newapi`
+   row (from `cordis.patch.yml`), so **Settings → Gateway Models** appears
+   alongside the official Models page.
 
-   ```yaml
-   - insert:
-       - id: llm-newapi
-         name: 'dsh-newapi-provider'
-   ```
-
-4. Restart the profile. The boot graph then serves
-   `/plugins/dsh-newapi-provider/client.js`, and **Settings → 网关模型**
-   (Gateway Models) appears alongside the official Models page.
+> ⚠️ Do **not** also insert `id: llm-newapi` in the profile's
+> `cordis.patch.yml` (user patch layer) — the bundle layer already mounts it,
+> and a duplicate causes a `duplicate loader entry id` error on boot.
 
 Client-bundle edits hot-apply after a browser reload (the bundle's `rev` is its
-content hash); host-half edits need a profile restart. **Do not** append query
-strings to `name` (`index.js?v=3`) or to the internal imports — the client-half
-resolution breaks, and Node already re-imports everything on restart.
-
-## Web configuration (Models page)
-
-The official **Settings → Models** editor only knows the shipped `llm-deepseek`
-and `llm-pi-ai` namespaces; a third-party provider namespace renders as a hint
-with saving disabled. This package ships a small patch that teaches the Models
-page the deepseek editor layout (API key + base URL + model catalog) for
-`llm-newapi`:
-
-```bash
-node scripts/patch-web-ui.mjs apply     # patch the profile bundle (idempotent)
-node scripts/patch-web-ui.mjs verify    # check state
-node scripts/patch-web-ui.mjs restore   # revert
-```
-
-After `apply`, reload the browser: **Settings → Models → Edit NewAPI** shows the
-API key field and (under 自定义设置) the base URL — saving writes
-`llm-newapi:` to `$DSH_HOME/settings.yaml` (hot-reloaded) and the key to the
-credential store.
-
-> ⚠️ A DeepSeek Harness upgrade reinstalls the bundle and drops the patch —
-> re-run `node scripts/patch-web-ui.mjs apply` after upgrading. This patch only
-> touches your local profile installation; the published package itself is
-> unmodified upstream code.
-
-All other settings (`catalogMode`, `endpointPriority`, `excludePatterns`, …)
-are edited in the `llm-newapi:` section of `$DSH_HOME/settings.yaml`.
+content hash); host-half edits need a profile restart.
 
 ## Configuration (`llm-newapi:` section of `$DSH_HOME/settings.yaml`)
 
@@ -176,7 +169,7 @@ are edited in the `llm-newapi:` section of `$DSH_HOME/settings.yaml`.
 | `catalogTtlMs` | `1800000` | Model-list cache freshness window |
 | `includeChatOnly` | `true` | Only expose chat-capable models to the picker |
 | `excludePatterns` | image/speech/embed/… | Regex patterns excluding models from the picker |
-| `endpointPriority` | `["openai","anthropic","gemini"]` | Wire-format preference order |
+| `endpointPriority` | `["openai-response","anthropic","openai","gemini"]` | Wire-format preference order (first match wins per model) |
 | `userId` | `1` | `New-Api-User` header for the management API |
 | `maxTokens` | `32768` | Output cap fallback when models.dev lacks data |
 | `defaultContextWindow` | `128000` | Context window fallback when models.dev lacks data |
@@ -189,7 +182,7 @@ Example (single gateway, backwards compatible):
 llm-newapi:
   baseURL: https://your-newapi-instance.com
   flavor: newapi
-  endpointPriority: [openai, anthropic, gemini]
+  endpointPriority: [openai-response, anthropic, openai, gemini]
   excludePatterns: ["(^|/|-)image", "(^|/|-)speech"]
 ```
 
@@ -205,7 +198,7 @@ llm-newapi:
       disabled: true              # hide from picker
     - id: glm-5.2-highspeed
       contextWindow: 1000000      # override context
-      protocol: openai            # force protocol
+      protocol: openai            # force protocol (openai/anthropic/gemini/openai-response)
     - id: my-internal-model       # custom model the gateway does not list
       name: My Internal Model
       contextWindow: 200000
@@ -216,14 +209,11 @@ llm-newapi:
       baseURL: https://litellm.example.com
       apiKeyEnv: LITELLM_API_KEY
       flavor: litellm
-      protocolPaths:
-        anthropic: /v1/messages   # per-protocol path override
     - id: custom-gw
       label: Custom Gateway
       baseURL: https://custom.example.com
       apiKeyEnv: CUSTOM_API_KEY
-      protocolPaths:
-        openai: /api/chat         # custom openai path
+      endpointPriority: [openai-response, openai]  # per-gateway override
 ```
 
 ## Testing
@@ -238,7 +228,7 @@ Environment resolution order for the smoke test: process environment →
 plugin `.env` → `~/Documents/dev/Agents/dsh-newapi/.env` (override with
 `NEWAPI_ENV_FILE`). Covered: gateway model discovery + picker filtering,
 models.dev parameter merging (deepseek-v4-flash = 1M context / MiniMax-M3 =
-512K), all three wire formats against a live gateway, and a tool-call round trip.
+512K), all four pi-ai protocols against a live gateway, and a tool-call round trip.
 
 ## Security notes
 
@@ -247,8 +237,8 @@ models.dev parameter merging (deepseek-v4-flash = 1M context / MiniMax-M3 =
   Credential-reference fields (`credential-ref`) are edited masked on the
   web Models page.
 - The package declares no runtime `dependencies`; `peerDependencies` reuse
-  the harness-installed `@deepseek-ai/*` packages, and `scripts/link.sh`
-  guarantees single-instance loading for local checkouts.
+  the harness-installed `@deepseek-ai/*` packages and `@earendil-works/pi-ai`,
+  and `scripts/link.sh` guarantees single-instance loading for local checkouts.
 
 ## License
 
