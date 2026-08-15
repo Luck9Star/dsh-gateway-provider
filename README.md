@@ -51,7 +51,7 @@ re-deploy.
 
    ```bash
    dsh plugin --profile web add dsh-gateway-provider          # latest
-   dsh plugin --profile web add dsh-gateway-provider@1.0.2    # pinned
+   dsh plugin --profile web add dsh-gateway-provider@<version>  # pinned
    ```
 
    `dsh plugin add` forwards to `pnpm add` in the profile directory.

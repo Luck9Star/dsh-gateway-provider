@@ -45,7 +45,7 @@ provider。如果你的模型都在网关后面，就得手工维护一份静态
 
    ```bash
    dsh plugin --profile web add dsh-gateway-provider          # 最新版
-   dsh plugin --profile web add dsh-gateway-provider@1.0.2    # 钉住版本
+   dsh plugin --profile web add dsh-gateway-provider@<version>  # 钉住版本
    ```
 
    `dsh plugin add` 会在 profile 目录里转发执行 `pnpm add`。bundle 补丁
