@@ -1,6 +1,6 @@
 {
   "name": "dsh-gateway-provider",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Generic LLM gateway model provider plugin for DeepSeek Harness: mounts newapi / LiteLLM / Higress / any OpenAI-compatible gateway as provider routes, auto-discovers the model list, enriches every model with models.dev parameters, and dispatches each model over its native wire protocol (OpenAI / Anthropic / Gemini) via the pi-ai SDK",
   "type": "module",
   "main": "index.js",

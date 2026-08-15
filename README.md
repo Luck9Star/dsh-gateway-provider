@@ -2,7 +2,7 @@
 
 [![gitleaks](https://github.com/Luck9Star/dsh-gateway-provider/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/Luck9Star/dsh-gateway-provider/actions/workflows/gitleaks.yml)
 
-> 中文文档：[README.zh.md](README.zh.md)
+> 中文文档：[docs/README.zh.md](docs/README.zh.md)
 
 Bring any LLM gateway — **newapi, LiteLLM, Higress, or any OpenAI-compatible
 endpoint** — into DeepSeek Harness. The plugin discovers the gateway's model
@@ -47,19 +47,17 @@ re-deploy.
 
 ## Quickstart
 
-1. Install the plugin into your profile — straight from GitHub, no clone needed:
+1. Install the plugin into your profile (published on npm):
 
    ```bash
-   dsh plugin --profile web add git+https://github.com/Luck9Star/dsh-gateway-provider.git#v1.0.0
+   dsh plugin --profile web add dsh-gateway-provider
    ```
 
-   The `#v1.0.0` suffix pins the install to that release; omit it to track
-   the latest main. `dsh plugin add` forwards to `pnpm add` in the profile
-   directory, so any
-   pnpm spec works (`github:Luck9Star/dsh-gateway-provider`, a local path, …).
-   The bundle patch (`cordis.patch.yml`) then mounts the `llm-newapi` loader
-   row automatically — no manual patch editing. The bare package name will
-   resolve once the package is published to npm.
+   `dsh plugin add` forwards to `pnpm add` in the profile directory, so any
+   pnpm spec works — e.g. pin a GitHub release with
+   `git+https://github.com/Luck9Star/dsh-gateway-provider.git#v1.0.1` (omit
+   the suffix to track main). The bundle patch (`cordis.patch.yml`) then
+   mounts the `llm-newapi` loader row automatically — no manual patch editing.
 
 2. Store your gateway key in `$DSH_HOME/.credentials.yaml` (mode 0600,
    hot-reloaded):

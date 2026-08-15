@@ -2,7 +2,7 @@
 
 [![gitleaks](https://github.com/Luck9Star/dsh-gateway-provider/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/Luck9Star/dsh-gateway-provider/actions/workflows/gitleaks.yml)
 
-> English: [README.md](README.md)
+> English: [README.md](../README.md)
 
 把任意 LLM 网关 —— **newapi、LiteLLM、Higress 或任何 OpenAI 兼容端点** —— 接入
 DeepSeek Harness。插件自动发现网关的模型列表，用 [models.dev](https://models.dev)
@@ -41,17 +41,17 @@ provider。如果你的模型都在网关后面，就得手工维护一份静态
 
 ## 快速开始
 
-1. 把插件装进 profile——直接从 GitHub 安装，无需 clone：
+1. 把插件装进 profile（已发布到 npm）：
 
    ```bash
-   dsh plugin --profile web add git+https://github.com/Luck9Star/dsh-gateway-provider.git#v1.0.0
+   dsh plugin --profile web add dsh-gateway-provider
    ```
 
-   `#v1.0.0` 后缀把安装钉在该 release；省略则跟踪 main 最新。`dsh plugin
-   add` 会在 profile 目录里转发执行 `pnpm add`，因此任何
-   pnpm spec 都可用（`github:Luck9Star/dsh-gateway-provider`、本地路径等）。
-   bundle 补丁（`cordis.patch.yml`）随后自动挂载 `llm-newapi` 加载行——
-   无需手工改 patch。裸包名要等发布到 npm 之后才能解析。
+   `dsh plugin add` 会在 profile 目录里转发执行 `pnpm add`，因此任何 pnpm
+   spec 都可用——例如用
+   `git+https://github.com/Luck9Star/dsh-gateway-provider.git#v1.0.1` 钉住
+   GitHub release（省略后缀则跟踪 main）。bundle 补丁（`cordis.patch.yml`）
+   随后自动挂载 `llm-newapi` 加载行——无需手工改 patch。
 
 2. 把网关 key 写入 `$DSH_HOME/.credentials.yaml`（权限 0600，热加载）：
 
