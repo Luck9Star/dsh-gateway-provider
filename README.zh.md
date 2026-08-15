@@ -44,10 +44,11 @@ provider。如果你的模型都在网关后面，就得手工维护一份静态
 1. 把插件装进 profile——直接从 GitHub 安装，无需 clone：
 
    ```bash
-   dsh plugin --profile web add git+https://github.com/Luck9Star/dsh-gateway-provider.git
+   dsh plugin --profile web add git+https://github.com/Luck9Star/dsh-gateway-provider.git#v1.0.0
    ```
 
-   `dsh plugin add` 会在 profile 目录里转发执行 `pnpm add`，因此任何
+   `#v1.0.0` 后缀把安装钉在该 release；省略则跟踪 main 最新。`dsh plugin
+   add` 会在 profile 目录里转发执行 `pnpm add`，因此任何
    pnpm spec 都可用（`github:Luck9Star/dsh-gateway-provider`、本地路径等）。
    bundle 补丁（`cordis.patch.yml`）随后自动挂载 `llm-newapi` 加载行——
    无需手工改 patch。裸包名要等发布到 npm 之后才能解析。

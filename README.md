@@ -50,10 +50,12 @@ re-deploy.
 1. Install the plugin into your profile — straight from GitHub, no clone needed:
 
    ```bash
-   dsh plugin --profile web add git+https://github.com/Luck9Star/dsh-gateway-provider.git
+   dsh plugin --profile web add git+https://github.com/Luck9Star/dsh-gateway-provider.git#v1.0.0
    ```
 
-   `dsh plugin add` forwards to `pnpm add` in the profile directory, so any
+   The `#v1.0.0` suffix pins the install to that release; omit it to track
+   the latest main. `dsh plugin add` forwards to `pnpm add` in the profile
+   directory, so any
    pnpm spec works (`github:Luck9Star/dsh-gateway-provider`, a local path, …).
    The bundle patch (`cordis.patch.yml`) then mounts the `llm-newapi` loader
    row automatically — no manual patch editing. The bare package name will
