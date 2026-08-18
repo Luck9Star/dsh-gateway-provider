@@ -22,6 +22,7 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false # never cache in release builds
+      - run: npm install # installs peerDependencies (no lockfile, zero deps)
       - run: npm run test:client
       - run: npm run test:urls
       - run: npm run test:schema
