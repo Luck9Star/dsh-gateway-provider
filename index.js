@@ -60,12 +60,30 @@ export const DEFAULT_MODELS_URL = "https://models.dev/models.json";
 const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 600_000;
 const DEFAULT_CATALOG_TTL_MS = 30 * 60 * 1000;
 
+/**
+ * String field tolerant of hand-edited YAML scalars. `settings.yaml` is a
+ * user-editable document parsed with YAML 1.2 core semantics: an unquoted
+ * `true` / `false` / `True` / `FALSE` round-trips as a boolean and an
+ * unquoted digit run as a number, long before the value reaches a strict
+ * `z.string()` — and because the settings seam refuses to register a
+ * namespace whose stored section fails its schema, one such scalar anywhere
+ * in the section bricks the whole namespace (the web UI then reports every
+ * write as `settings-rejected: settings namespace "llm-newapi" is not
+ * registered`). Booleans and finite numbers coerce to their string form;
+ * anything else still fails loud with schemastery's own union diagnostic.
+ */
+const coercedString = () => z.union([
+  z.string(),
+  z.transform(z.boolean(), (value) => String(value)),
+  z.transform(z.number(), (value) => String(value)),
+]);
+
 /** Schema for one model-level override on a gateway (all fields optional). */
 const ModelOverrideSchema = z.object({
   /** Model id exactly as the gateway accepts it. */
-  id: z.string(),
+  id: coercedString().required(),
   /** Display name override. */
-  name: z.string(),
+  name: coercedString(),
   /** Hide this model from the picker. */
   disabled: z.boolean(),
   /** Force the wire protocol for this model (openai/anthropic/gemini/…). */
@@ -75,7 +93,7 @@ const ModelOverrideSchema = z.object({
   /** Override the output-token cap. */
   maxTokens: z.number().step(1).min(1),
   /** Reasoning level set (e.g. ["off","low","medium","high"]). */
-  reasoningLevels: z.array(z.string()),
+  reasoningLevels: z.array(coercedString()),
 });
 
 /** Gateway-type templates the settings UI offers (informational labels). */
@@ -88,49 +106,49 @@ const FLAVORS = ["newapi", "litellm", "higress", "openai-compatible", "custom"];
  */
 const GatewaySchema = z.object({
   /** Short stable id; becomes the provider route suffix (`gateway:<id>`). */
-  id: z.string().required(),
+  id: coercedString().required(),
   /** Human-readable gateway name. */
-  label: z.string(),
+  label: coercedString(),
   /** Gateway base URL (unused when protocol URL fields are set). */
-  baseURL: z.string(),
+  baseURL: coercedString(),
   /** Full chat-completions endpoint URL (custom template). */
-  openaiURL: z.string(),
+  openaiURL: coercedString(),
   /** Full Responses endpoint URL (custom template). */
-  responsesURL: z.string(),
+  responsesURL: coercedString(),
   /** Full Anthropic messages endpoint URL (custom template). */
-  anthropicURL: z.string(),
+  anthropicURL: coercedString(),
   /** Environment-variable name (credential ref) holding the API key. */
-  apiKeyEnv: z.string().role("credential-ref"),
+  apiKeyEnv: coercedString().role("credential-ref"),
   /** Gateway type label (newapi/litellm/higress/openai-compatible/custom). */
   flavor: z.union(FLAVORS),
   /** Model-list source: `auto` (prefer /v1/models), `v1`, or `management`. */
   catalogMode: z.union(["auto", "v1", "management"]),
   /** User id sent to the management API when it is used. */
-  userId: z.string(),
+  userId: coercedString(),
   /** Per-model overrides and custom models. */
   models: z.array(ModelOverrideSchema),
   /** Wire-format preference order for this gateway. */
-  endpointPriority: z.array(z.string()),
+  endpointPriority: z.array(coercedString()),
 });
 
 export const Config = z.object({
   // ---- Legacy single-connection fields (build the default `newapi` route) ----
   /** Display name of the default gateway route (defaults to "NewAPI"). */
-  label: z.string(),
+  label: coercedString(),
   /** Environment-variable name (credential ref) holding the default gateway API key. */
-  apiKeyEnv: z.string().role("credential-ref").default(DEFAULT_API_KEY_ENV),
+  apiKeyEnv: coercedString().role("credential-ref").default(DEFAULT_API_KEY_ENV),
   /** Default gateway base URL; resolved from NEWAPI_BASE_URL / NEWAPI_API_URL then the public cloud default. */
-  baseURL: z.string(),
+  baseURL: coercedString(),
   /** Full chat-completions endpoint URL (custom template for the default gateway). */
-  openaiURL: z.string(),
+  openaiURL: coercedString(),
   /** Full Responses endpoint URL (custom template for the default gateway). */
-  responsesURL: z.string(),
+  responsesURL: coercedString(),
   /** Full Anthropic messages endpoint URL (custom template for the default gateway). */
-  anthropicURL: z.string(),
+  anthropicURL: coercedString(),
   /** Gateway type label shown in the UI (newapi/litellm/higress/openai-compatible/custom). */
   flavor: z.union(FLAVORS).default("newapi"),
   /** models.dev catalog URL (any fetch-able URL; file: works for offline mirrors). */
-  modelsUrl: z.string().default(DEFAULT_MODELS_URL),
+  modelsUrl: coercedString().default(DEFAULT_MODELS_URL),
   /** Enrich gateway models with models.dev parameters. */
   useModelsDev: z.boolean().default(true),
   /** Widen the unknown-model reasoning fallback to the full off~max set. */
@@ -144,11 +162,17 @@ export const Config = z.object({
   /** Exclude non-chat model families from the picker. */
   includeChatOnly: z.boolean().default(true),
   /** Regex patterns excluding models from the picker. */
-  excludePatterns: z.array(z.string()).default(DEFAULT_EXCLUDE_PATTERNS),
+  excludePatterns: z.array(coercedString()).default(DEFAULT_EXCLUDE_PATTERNS),
   /** Wire-format preference order, intersected with each model's supported types. */
-  endpointPriority: z.array(z.string()).default(DEFAULT_ENDPOINT_PRIORITY),
+  endpointPriority: z.array(coercedString()).default(DEFAULT_ENDPOINT_PRIORITY),
   /** User id sent to the management API when it is used. */
-  userId: z.string().default("1"),
+  userId: coercedString().default("1"),
+  /**
+   * Extra HTTP headers sent with every provider request to the default
+   * gateway (name → value). Reserved attribution headers (user-agent) are
+   * filtered out at request time; per-request values are unaffected.
+   */
+  headers: z.dict(coercedString()),
   /** Fallback output-token cap for models without models.dev data. */
   maxTokens: z.number().step(1).min(1).default(DEFAULT_MAX_TOKENS),
   /** Fallback context window for models without models.dev data. */

@@ -113,6 +113,18 @@ llm-newapi:
 **网关模型**设置页提供同样的操作：搜索、带计数的已隐藏/自定义筛选、逐模型覆写
 编辑器（placeholder 显示发现值）、连接测试、保存/取消语义。
 
+> ⚠️ **手工编辑 YAML？** `settings.yaml` 按 YAML 1.2 core 语义解析：不带引号的
+> `true` / `false`（任意大小写）会变成布尔值，不带引号的数字串会变成数值。本节
+> 所有纯字符串字段（`id`、`name`、`label`、`baseURL`、`apiKeyEnv`、`modelsUrl`、
+> `userId`，以及 `reasoningLevels` / `excludePatterns` / `endpointPriority` 的
+> 条目……）都可容忍这些被强转的形式，但最稳妥的习惯是给有含义的 token 加引号
+> ——写 `reasoningLevels: ["off", "low", "high"]`，而不是
+> `reasoningLevels: [off, low, high]`——更不要在该写级别名的地方写 `false`（它会
+> 以垃圾级别 `"false"` 存活，并被静默排除出选择器）。结构上非法的分节（比如字符
+> 串位置出现对象）会在注册时被拒绝：namespace 保持未注册状态，Web 设置页的每次
+> 写入都会得到
+> `settings-rejected: settings namespace "llm-newapi" is not registered`。
+
 ## 配置参考
 
 `$DSH_HOME/settings.yaml` 的 `llm-newapi:` 节。扁平字段（`baseURL` /
@@ -139,6 +151,7 @@ llm-newapi:
 | `excludePatterns` | image/speech/embed/… | 选择器剔除的正则列表 |
 | `endpointPriority` | `["openai-response","anthropic","openai","gemini"]` | wire 格式优先级（每模型取首个匹配） |
 | `userId` | `1` | 管理 API 的 `New-Api-User` 头 |
+| `headers` | – | 随每个 provider 请求附带的额外 HTTP 头（名称 → 值）；归属头（`user-agent`）会被过滤掉 |
 | `maxTokens` | `32768` | 无 models.dev 数据时的输出上限兜底 |
 | `defaultContextWindow` | `128000` | 无 models.dev 数据时的上下文兜底 |
 | `streamIdleTimeoutMs` | `300000` | 流空闲看门狗 |

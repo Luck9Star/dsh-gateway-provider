@@ -125,6 +125,21 @@ The **Gateway Models** page exposes the same operations with a UI: search,
 hidden/custom filters with counts, a per-model override editor (placeholders
 show discovered values), connection test, and save/cancel semantics.
 
+> ⚠️ **Hand-editing YAML?** `settings.yaml` is parsed with YAML 1.2 core
+> semantics: an unquoted `true` / `false` (any casing) becomes a boolean and
+> an unquoted digit run becomes a number. Every plain string field of the
+> section (`id`, `name`, `label`, `baseURL`, `apiKeyEnv`, `modelsUrl`,
+> `userId`, `reasoningLevels` / `excludePatterns` / `endpointPriority`
+> entries, …) tolerates the coerced form, but the cleanest habit is quoting
+> intent-significant tokens — write `reasoningLevels: ["off", "low",
+> "high"]`, not `reasoningLevels: [off, low, high]` — and never `false`
+> where a level name is meant (it survives as the junk level `"false"` and
+> is silently dropped from the picker). A structurally invalid section
+> (objects where strings belong, etc.) is refused at registration: the
+> namespace stays unregistered and every settings write from the web UI
+> then answers `settings-rejected: settings namespace "llm-newapi" is not
+> registered`.
+
 ## Configuration reference
 
 Section `llm-newapi:` of `$DSH_HOME/settings.yaml`. The flat fields
@@ -151,6 +166,7 @@ the `gateways` array support most of the same fields per gateway
 | `excludePatterns` | image/speech/embed/… | Regex patterns excluding models from the picker |
 | `endpointPriority` | `["openai-response","anthropic","openai","gemini"]` | Wire-format preference order (first match wins per model) |
 | `userId` | `1` | `New-Api-User` header for the management API |
+| `headers` | – | Extra HTTP headers (name → value) sent with every provider request; attribution headers (`user-agent`) are filtered out |
 | `maxTokens` | `32768` | Output cap fallback when models.dev lacks data |
 | `defaultContextWindow` | `128000` | Context window fallback when models.dev lacks data |
 | `streamIdleTimeoutMs` | `300000` | Stream idle watchdog |

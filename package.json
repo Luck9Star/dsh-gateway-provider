@@ -27,7 +27,9 @@
     "link": "bash scripts/link.sh",
     "smoke": "node test/smoke.mjs",
     "test:client": "node test/client-render.mjs",
-    "test:urls": "node test/protocol-urls.mjs"
+    "test:urls": "node test/protocol-urls.mjs",
+    "test:schema": "node test/schema-coercion.mjs",
+    "test:errors": "node test/error-codes.mjs"
   },
   "keywords": [
     "deepseek-harness",
@@ -61,12 +63,11 @@
   "dependencies": {},
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-anonymous-user-id": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-credentials": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-launch-environment": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-llm": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-settings": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-timeout": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-credentials": "^0.1.0-rc.7",
+    "@deepseek-ai/dsh-launch-environment": "^0.1.0-rc.7",
+    "@deepseek-ai/dsh-llm": "^0.1.0-rc.7",
+    "@deepseek-ai/dsh-settings": "^0.1.0-rc.7",
+    "@deepseek-ai/dsh-timeout": "^0.1.0-rc.7",
     "@deepseek-ai/schemastery": "^3.18.1",
     "@earendil-works/pi-ai": "^0.82.1"
   }
