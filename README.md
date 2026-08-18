@@ -4,246 +4,163 @@
 
 > 中文文档：[docs/README.zh.md](docs/README.zh.md)
 
-Bring any LLM gateway — **newapi, LiteLLM, Higress, or any OpenAI-compatible
-endpoint** — into DeepSeek Harness. The plugin discovers the gateway's model
-list automatically, enriches every model with real parameters from
-[models.dev](https://models.dev), and serves each model over its native wire
-protocol (OpenAI / Anthropic / Gemini) through the pi-ai SDK.
+Use **all the models behind your LLM gateway** — newapi, LiteLLM, Higress,
+or any OpenAI-compatible endpoint — directly in DeepSeek Harness.
+
+Install the plugin, paste your API key, and every gateway model shows up in
+dsh's model picker with its **real** parameters (context window, output cap,
+reasoning support) fetched from [models.dev](https://models.dev). Requests
+go out over each model's own native protocol — OpenAI, Anthropic, or Gemini
+— so tool calls and streaming behave the way that model's maker intended.
 
 ## Why this exists
 
-DeepSeek Harness ships first-party adapters (`llm-deepseek`, `llm-pi-ai`) that
-each speak for one provider. If your models live behind a gateway, the
-alternative is a hand-maintained static model list with guessed context
-windows and output caps.
+dsh ships one adapter per official provider. If your models live behind a
+gateway, the manual alternative is a hand-maintained static model list with
+guessed context windows and output caps. This plugin mounts the gateway
+itself instead:
 
-This plugin mounts the gateway itself: **N gateways become N provider
-routes, with zero static model lists.** Every model keeps its true
-parameters, and adding a model on the gateway side is enough — nothing to
-re-deploy.
-
-## What you get
-
-- **Multiple gateways** — a default `newapi` route plus one `gateway:<id>`
-  route per extra gateway, each with its own catalog cache.
-- **Automatic discovery** — `GET {base}/v1/models` first (including each
-  model's supported request formats), management API fallback second.
-- **Real parameters** — models.dev data fills context window, output cap,
-  reasoning levels, and release date; config defaults are only a fallback.
-- **Every wire format** — each model routes to its own protocol
-  (`openai-completions` / `openai-responses` / `anthropic-messages` /
-  `google-generative-ai`); no hand-written SSE or request serialization.
-- **A settings page** — **Settings → Gateway Models**: add and edit gateways
-  from templates, test connections, hide / override / custom-add models —
-  no YAML editing required.
-- **A clean picker** — newest-first release-date sorting, chat-only filtering,
-  and regex excludes for non-chat models.
+- **Nothing to maintain by hand** — the model list is read from the gateway
+  (`GET /v1/models`, with a management-API fallback for newapi); add a model
+  on the gateway side and it appears in dsh, no re-deploy.
+- **Real numbers, not guesses** — models.dev data fills context window,
+  output cap, reasoning levels, release date; config defaults only fill gaps.
+- **Every wire format, one plugin** — each model routes over its own
+  protocol (OpenAI chat completions / OpenAI responses / Anthropic messages
+  / Gemini), handled by the same
+  [pi-ai](https://www.npmjs.com/package/@earendil-works/pi-ai) SDK the
+  official dsh adapter uses.
+- **Multiple gateways at once** — a default `newapi` route plus one
+  `gateway:<id>` route per extra gateway, each with its own cache and key.
+- **A settings page instead of YAML** — **Settings → Gateway Models**: add
+  gateways from templates (NewAPI / LiteLLM / Higress / OpenAI-compatible /
+  fully custom), test connections, sync models, hide or override any model,
+  add custom models.
 
 ## Requirements
 
-- A DeepSeek Harness installation with a profile (`dsh`)
-- A reachable gateway: newapi / LiteLLM / Higress / any OpenAI-compatible endpoint
-- An API key for that gateway
+- DeepSeek Harness (dsh) with a `web` profile (the settings page is a web-UI
+  extension; the provider itself works in any profile).
+- A gateway API key (e.g. a newapi token).
 
-## Quickstart
+## Install
 
-1. Install the plugin into your profile (published on npm):
+```sh
+# 1. Install the plugin (dsh plugin add runs pnpm add under the hood)
+dsh plugin --profile web add dsh-gateway-provider
 
-   ```bash
-   dsh plugin --profile web add dsh-gateway-provider          # latest
-   dsh plugin --profile web add dsh-gateway-provider@<version>  # pinned
-   ```
+# 2. Store your key — pick ONE of:
+#    a) the dsh credentials file (recommended; created with mode 0600, hot-reloaded)
+echo "NEWAPI_API_KEY: sk-REPLACE_WITH_YOUR_KEY" >> ~/.dsh/.credentials.yaml
+#    b) or export it in the shell you launch dsh from:
+#       export NEWAPI_API_KEY=sk-REPLACE_WITH_YOUR_KEY
 
-   `dsh plugin add` forwards to `pnpm add` in the profile directory.
-   The bundle patch (`cordis.patch.yml`) then mounts the `llm-newapi`
-   loader row automatically — no manual patch editing.
-
-2. Store your gateway key in `$DSH_HOME/.credentials.yaml` (mode 0600,
-   hot-reloaded):
-
-   ```yaml
-   NEWAPI_API_KEY: sk-REPLACE_WITH_YOUR_KEY
-   ```
-
-   Or export `NEWAPI_API_KEY` in the launching environment.
-
-3. Restart the profile, then open **Settings → Gateway Models**.
-
-**Success looks like:** the gateway appears with a "synced N models" badge,
-and every chat-capable model is selectable with its real context window.
-The base URL resolves from `llm-newapi.baseURL` settings →
-`NEWAPI_BASE_URL` / `NEWAPI_API_URL` env → the public default
-`https://api.newapi.ai`.
-
-## Add more gateways
-
-Extra gateways live in the `gateways` array — each becomes its own
-`gateway:<id>` provider route:
-
-```yaml
-llm-newapi:
-  baseURL: https://your-newapi-instance.com
-  gateways:
-    - id: litellm-prod
-      label: LiteLLM Prod
-      baseURL: https://litellm.example.com
-      apiKeyEnv: LITELLM_API_KEY
-      flavor: litellm            # form template: newapi / litellm / higress / openai-compatible / custom
-
-    # Fully-custom gateway: complete per-protocol endpoint URLs, no shared
-    # base. A protocol left empty stays disabled.
-    - id: edge
-      label: Edge GW
-      flavor: custom
-      openaiURL: https://edge.example.com/openai/v1/chat/completions
-      responsesURL: https://edge.example.com/openai/v1/responses
-      anthropicURL: https://edge.example.com/anthropic/v1/messages
-      apiKeyEnv: EDGE_API_KEY
+# 3. Restart and open the settings page
+dsh --profile web
+# → Settings → Gateway Models
 ```
 
-You can also add gateways from the settings page (with the same templates)
-instead of editing YAML.
+**Expected result:** the model picker gains a "NewAPI" route listing your
+gateway's chat models, newest first. Click **Test** on the gateway card —
+it should answer `✓ Connected — N models`. Not using the public newapi
+cloud? Set **Base URL** on the card (or `baseURL` in config) to your own
+gateway address first.
 
-## Control the model list per gateway
+## Daily use
 
-Hide models, fix wrong metadata, or add models the gateway does not list:
+Everything lives in **Settings → Gateway Models**:
 
-```yaml
-llm-newapi:
-  models:
-    - id: glm-5.2
-      disabled: true              # hide from picker
-    - id: glm-5.2-highspeed
-      contextWindow: 1000000      # override discovered value
-      protocol: openai            # force protocol (openai/anthropic/gemini/openai-response)
-    - id: my-internal-model       # custom model the gateway does not list
-      name: My Internal Model
-      contextWindow: 200000
-```
-
-The **Gateway Models** page exposes the same operations with a UI: search,
-hidden/custom filters with counts, a per-model override editor (placeholders
-show discovered values), connection test, and save/cancel semantics.
-
-> ⚠️ **Hand-editing YAML?** `settings.yaml` is parsed with YAML 1.2 core
-> semantics: an unquoted `true` / `false` (any casing) becomes a boolean and
-> an unquoted digit run becomes a number. Every plain string field of the
-> section (`id`, `name`, `label`, `baseURL`, `apiKeyEnv`, `modelsUrl`,
-> `userId`, `reasoningLevels` / `excludePatterns` / `endpointPriority`
-> entries, …) tolerates the coerced form, but the cleanest habit is quoting
-> intent-significant tokens — write `reasoningLevels: ["off", "low",
-> "high"]`, not `reasoningLevels: [off, low, high]` — and never `false`
-> where a level name is meant (it survives as the junk level `"false"` and
-> is silently dropped from the picker). A structurally invalid section
-> (objects where strings belong, etc.) is refused at registration: the
-> namespace stays unregistered and every settings write from the web UI
-> then answers `settings-rejected: settings namespace "llm-newapi" is not
-> registered`.
+- **Add more gateways** — "Add Gateway", pick a template (LiteLLM, Higress,
+  OpenAI-compatible, or fully custom with per-protocol URLs), point it at
+  the base URL, name its key env var, Test, Sync. Each gateway becomes its
+  own route in the picker.
+- **Tame the model list** — non-chat models (image / speech / embedding /
+  rerank …) are excluded by default regexes; hide or rename any model; add
+  a custom model by hand if the gateway hides it; per-model protocol,
+  context window, output cap, and reasoning levels are all editable.
+- **Keys live in dsh's credential store** — the settings page shows a badge
+  (`✓ Key set · NEWAPI_API_KEY` / `⚠ No key set`) and can write the key
+  there for you.
 
 ## Configuration reference
 
-Section `llm-newapi:` of `$DSH_HOME/settings.yaml`. The flat fields
-(`baseURL` / `apiKeyEnv` / …) seed the default `newapi` route; gateways in
-the `gateways` array support most of the same fields per gateway
-(`label` / `apiKeyEnv` / `flavor` / `catalogMode` / `endpointPriority` / …).
+Optional — everything below has a working default. Config lives in the
+`llm-newapi:` section of `~/.dsh/settings.yaml` (the settings page edits
+the same keys). The frequently used ones:
 
-| Field | Default | Description |
-|-------|---------|-------------|
-| `label` | `NewAPI` | Display name of the default gateway route |
-| `apiKeyEnv` | `NEWAPI_API_KEY` | Credential reference (environment variable name) |
-| `baseURL` | env `NEWAPI_BASE_URL` / `NEWAPI_API_URL` → `https://api.newapi.ai` | Gateway base URL (unused when protocol URLs are set) |
-| `flavor` | `newapi` | Gateway template: `newapi` / `litellm` / `higress` / `openai-compatible` / `custom` |
-| `openaiURL` | – | Full chat-completions endpoint URL (custom template; empty = protocol disabled) |
-| `responsesURL` | – | Full Responses endpoint URL (custom template; empty = protocol disabled) |
-| `anthropicURL` | – | Full Anthropic messages endpoint URL (custom template; empty = protocol disabled) |
-| `modelsUrl` | `https://models.dev/models.json` | models.dev source (`file:` URLs work offline) |
-| `useModelsDev` | `true` | Enrich gateway models with models.dev parameters |
-| `extendedReasoningLevels` | `false` | Widen the unknown-model reasoning fallback to off~max (default off/low/medium/high) |
-| `sortModelsByRelease` | `true` | Sort the picker newest-first by release date (unknown dates first) |
-| `catalogMode` | `auto` | Model-list source: `auto` / `v1` / `management` |
-| `catalogTtlMs` | `1800000` | Model-list cache freshness window |
-| `includeChatOnly` | `true` | Only expose chat-capable models to the picker |
-| `excludePatterns` | image/speech/embed/… | Regex patterns excluding models from the picker |
-| `endpointPriority` | `["openai-response","anthropic","openai","gemini"]` | Wire-format preference order (first match wins per model) |
-| `userId` | `1` | `New-Api-User` header for the management API |
-| `headers` | – | Extra HTTP headers (name → value) sent with every provider request; attribution headers (`user-agent`) are filtered out |
-| `maxTokens` | `32768` | Output cap fallback when models.dev lacks data |
-| `defaultContextWindow` | `128000` | Context window fallback when models.dev lacks data |
-| `streamIdleTimeoutMs` | `300000` | Stream idle watchdog |
-| `retryPolicy` | standard | Same shape as `llm-deepseek` |
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `baseURL` | `https://api.newapi.ai` | Your gateway's base URL. Env fallbacks: `NEWAPI_BASE_URL`, `NEWAPI_API_URL`. |
+| `apiKeyEnv` | `NEWAPI_API_KEY` | Which env/credential variable holds the key. |
+| `label` | `NewAPI` | Route label shown in the picker. |
+| `flavor` | `newapi` | Template label only (`newapi` / `litellm` / `higress` / `openai-compatible` / `custom`). |
+| `gateways` | — | Array of extra gateways: `{ id, baseURL, apiKeyEnv, label, … }`, each becoming a `gateway:<id>` route. |
+| `models` | — | Per-model overrides: `{ id, name, disabled, protocol, contextWindow, maxTokens, reasoningLevels }`. |
+| `useModelsDev` / `modelsUrl` | `true` / models.dev | Parameter enrichment source (supports `file:` URLs for offline). |
+| `excludePatterns` | image/speech/… | Regex list of model ids to keep out of the picker. |
+| `sortModelsByRelease` | `true` | Newest models first. |
+| `catalogMode` | `auto` | `v1` (`/v1/models` only) / `management` (newapi user API) / `auto`. |
+| `endpointPriority` | responses → anthropic → openai → gemini | Which protocol to prefer when a model supports several. |
+| `openaiURL` / `responsesURL` / `anthropicURL` | — | Fully-custom gateways only: per-protocol endpoint URLs; unset = that protocol off. |
+| `maxTokens` / `defaultContextWindow` | `32768` / `128000` | Fallbacks when models.dev has no data. |
+| `streamIdleTimeoutMs` | `600000` | Idle timeout while streaming. |
+| `headers` | — | Extra HTTP headers sent to the gateway. |
 
-## How it works
+## Troubleshooting
 
-All wire-format concerns are delegated to
-[`@earendil-works/pi-ai`](https://www.npmjs.com/package/@earendil-works/pi-ai)
-— the same SDK the official `dsh-llm-pi-ai` adapter uses. Per request:
+| Symptom | Cause → fix |
+| --- | --- |
+| Picker route exists but zero models | The plugin can't read your model list. Check the gateway base URL; try `catalogMode: "management"` for newapi gateways that restrict `/v1/models`. |
+| `401` / auth errors on every request | Key missing or wrong: check the badge in Settings → Gateway Models, or `NEWAPI_API_KEY` in `~/.dsh/.credentials.yaml`. |
+| A model's context window looks wrong | models.dev had no match. Edit the model on the settings page (or a `models:` override). |
+| Wrong format answers / tool calls flaky for one model | That model is routed over a protocol it handles poorly. Pin `protocol` on the model (`openai`, `openai-response`, `anthropic`, `gemini`). |
+| Custom gateway with separate endpoints | Use `flavor: "custom"` and set `openaiURL` / `responsesURL` / `anthropicURL` explicitly. |
 
-```
-harness GenerateOptions
-  → toPiContext()          lib/pi-bridge.js   harness messages → pi-ai Context
-  → models.streamSimple()  pi-ai SDK          dispatches by each model's `api`
-  → toStreamChunks()       lib/pi-bridge.js   pi-ai events → harness chunks
-```
+## How it works (one minute version)
 
-Each discovered model is built with an `api` field mapped from the gateway's
-advertised `supported_endpoint_types`, honoring `endpointPriority`; the
-pi-ai provider receives an api *map*, so every model routes to its own
-protocol implementation. `sdkBaseURL()` appends `/v1` for OpenAI-protocol
-models and leaves Anthropic/Google bases untouched.
+At startup the plugin registers one provider route per gateway, pulls the
+model list from the gateway, and fuzzy-matches each model id against
+models.dev to fill in real parameters. When you pick a model, dsh's request
+is translated to the pi-ai SDK's format and sent over that model's native
+protocol; the streamed reply is translated back into dsh chunks. Catalogs
+are cached (30 min by default) per gateway. No hand-written protocol code —
+the bridge is lifted from the official `dsh-llm-pi-ai` adapter.
 
-```
-dsh-gateway-provider/
-├── index.js            # plugin entry: Config, provider registration, settings/credentials
-├── cordis.patch.yml    # dsh.bundle patch (auto-mounts via `dsh plugin add`)
-├── lib/                # adapter, pi-provider, pi-bridge, catalog, modelsdev, thinking, client
-├── test/               # smoke (live gateway) + offline units + settings-UI render
-└── scripts/link.sh     # link profile node_modules for local checkouts
+## Development
+
+```sh
+git clone https://github.com/Luck9Star/dsh-gateway-provider
+cd dsh-gateway-provider
+npm run link              # symlink into your dsh profile (single instanceof safety)
+npm run test:client       # settings-UI render, both locales
+npm run test:urls         # URL/derivation units
+npm run smoke             # live gateway round-trip (needs a real key)
 ```
 
-## Develop from a checkout
+Developing from a checkout: point the profile's `package.json` at
+`"dsh-gateway-provider": "link:/abs/path"` and re-run `pnpm install` in the
+profile. Do **not** also add an `id: llm-newapi` row to the profile's own
+`cordis.patch.yml` — the bundle patch already provides it (duplicate row =
+loader error).
 
-1. `bash scripts/link.sh` — symlink this package's `node_modules` to the
-   profile's so bare `@deepseek-ai/*` imports resolve to the exact module
-   instances the harness process uses (single-copy `instanceof` safety).
-2. Register the checkout as a profile link dependency and install:
+## References & credits
 
-   ```bash
-   cd "$DSH_HOME/profiles/web"
-   # package.json dependencies: "dsh-gateway-provider": "link:/absolute/path/to/dsh-gateway-provider"
-   # and add "dsh-gateway-provider" to the bundles list in the same file
-   pnpm install
-   ```
-
-3. Restart the profile.
-
-> ⚠️ Do **not** also insert `id: llm-newapi` into the profile's own
-> `cordis.patch.yml` — the bundle layer already mounts it, and a duplicate
-> raises `duplicate loader entry id` at boot.
-
-Client-bundle edits hot-apply after a browser reload; host-half edits need a
-profile restart.
-
-### Tests
-
-```bash
-node test/smoke.mjs            # live gateway: catalog / openai × 2 / tools / anthropic / gemini / custom-urls
-node test/smoke.mjs --only custom-urls
-node test/protocol-urls.mjs    # offline: URL derivation + gateway resolution
-node test/client-render.mjs    # offline: settings-UI render tree (zh + en)
-```
-
-Smoke-test credentials resolve from: process environment → plugin `.env` →
-`$NEWAPI_ENV_FILE` (plus a legacy author-local fallback path).
+- [pi-ai SDK](https://www.npmjs.com/package/@earendil-works/pi-ai) — all
+  four wire protocols; the bridge reuses the official `dsh-llm-pi-ai`
+  adapter's translation layer.
+- [models.dev](https://models.dev) — the parameter catalog (context
+  windows, output caps, reasoning, release dates).
+- [new-api](https://github.com/QuantumNous/new-api), 
+  [LiteLLM](https://github.com/BerriAI/litellm),
+  [Higress](https://github.com/alibaba/higress) — the gateways this plugin
+  is tested against (any OpenAI-compatible endpoint works).
 
 ## Security
 
-- The API key is only resolved through `$DSH_HOME/.credentials.yaml` (0600)
-  or the environment — never written to logs, config, or chat.
-  Credential fields are edited masked on the web UI.
-- No runtime `dependencies`; `peerDependencies` reuse the harness-installed
-  `@deepseek-ai/*` packages and `@earendil-works/pi-ai`. Commits are gated
-  by gitleaks locally (pre-commit) and in CI.
+Keys live in dsh's credential store or the launching environment — never in
+settings YAML. The repo runs [gitleaks](https://github.com/gitleaks/gitleaks)
+in CI and pre-commit to keep secrets out.
 
 ## License
 
-MIT
+[MIT](LICENSE)
