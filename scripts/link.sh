@@ -1,7 +1,18 @@
 #!/usr/bin/env bash
-# Link this plugin package's bare imports (@deepseek-ai/*, @deepseek-ai/schemastery)
-# to the running DeepSeek Harness profile's node_modules, so the plugin loads the
-# EXACT module instances the harness process uses (single-copy instanceof safety).
+# Link this plugin package's harness imports (@deepseek-ai/*) to the running
+# DeepSeek Harness profile's node_modules, so the loads use the EXACT module
+# instances the harness process uses (single-copy instanceof safety for cordis,
+# dsh-llm LlmError, schemastery schemas, …).
+#
+# pi-ai is intentionally NOT linked: the plugin ships its own pinned copy under
+# node_modules/@earendil-works/pi-ai (a direct dependency), independent of the
+# pi-ai version bundled with the harness. The plugin↔harness boundary passes
+# plain data (GenerateOptions in, StreamChunks out; the pi-bridge layer never
+# leaks pi-ai objects across it), so the two copies coexist safely.
+#
+# Layout after this script:
+#   node_modules/@deepseek-ai/<pkg>   -> $PROFILE_NODE_MODULES/@deepseek-ai/<pkg>  (symlinks)
+#   node_modules/@earendil-works/…    =  real directories (plugin-owned, pinned)
 #
 # Usage: bash scripts/link.sh [profile-name]
 #   profile-name defaults to "web".
@@ -25,13 +36,25 @@ if [ -z "${TARGET}" ]; then
   exit 1
 fi
 
-LINK="${HERE}/node_modules"
-if [ -L "${LINK}" ] && [ "$(readlink "${LINK}")" = "${TARGET}" ]; then
-  echo "already linked: ${LINK} -> ${TARGET}"
-  exit 0
+# The plugin must ship its own pi-ai; restore it if node_modules was wiped.
+if [ ! -f "${HERE}/node_modules/@earendil-works/pi-ai/package.json" ]; then
+  echo "error: plugin-owned pi-ai missing under ${HERE}/node_modules/@earendil-works" >&2
+  echo "hint: run 'npm install' in the plugin root (pi-ai is a direct dependency)" >&2
+  exit 1
 fi
 
-rm -rf "${LINK}"
-ln -s "${TARGET}" "${LINK}"
-echo "linked: ${LINK} -> ${TARGET}"
-echo "note: node_modules is gitignored; run 'bash scripts/link.sh' again after cloning."
+# Harness packages resolved from the profile via symlink (single copy).
+PACKAGES=(cordis dsh-credentials dsh-launch-environment dsh-llm dsh-settings dsh-timeout schemastery)
+for PKG in "${PACKAGES[@]}"; do
+  LINK="${HERE}/node_modules/@deepseek-ai/${PKG}"
+  mkdir -p "${HERE}/node_modules/@deepseek-ai"
+  if [ -L "${LINK}" ] && [ "$(readlink "${LINK}")" = "${TARGET}/@deepseek-ai/${PKG}" ]; then
+    continue
+  fi
+  rm -rf "${LINK}"
+  ln -s "${TARGET}/@deepseek-ai/${PKG}" "${LINK}"
+  echo "linked: node_modules/@deepseek-ai/${PKG} -> ${TARGET}/@deepseek-ai/${PKG}"
+done
+
+echo "node_modules ready: @deepseek-ai/* linked to profile, pi-ai pinned locally"
+echo "note: node_modules is gitignored; run 'npm install' + 'bash scripts/link.sh' after cloning."

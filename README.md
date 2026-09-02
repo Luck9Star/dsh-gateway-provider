@@ -131,11 +131,23 @@ the bridge is lifted from the official `dsh-llm-pi-ai` adapter.
 ```sh
 git clone https://github.com/Luck9Star/dsh-gateway-provider
 cd dsh-gateway-provider
-npm run link              # symlink into your dsh profile (single instanceof safety)
+npm install                # installs the plugin-pinned pi-ai copy (direct dependency)
+npm run link               # symlink @deepseek-ai/* into your dsh profile (single instanceof safety)
 npm run test:client       # settings-UI render, both locales
 npm run test:urls         # URL/derivation units
 npm run smoke             # live gateway round-trip (needs a real key)
 ```
+
+### Why the plugin pins its own pi-ai
+
+`@earendil-works/pi-ai` is a direct dependency (exact-pinned), independent of
+the pi-ai version bundled with the harness. This decouples the gateway model
+catalog (thinking levels, per-provider compat such as zhipu GLM's
+`supportsDeveloperRole: false`) from harness upgrades: a model missing from
+the harness's older catalog no longer degrades request encoding. The
+plugin↔harness boundary passes plain data (`GenerateOptions` in, dsh
+`StreamChunk`s out; `lib/pi-bridge.js` never leaks pi-ai objects across), so
+the plugin's pi-ai copy and the harness's own coexist safely in one process.
 
 Developing from a checkout: point the profile's `package.json` at
 `"dsh-gateway-provider": "link:/abs/path"` and re-run `pnpm install` in the

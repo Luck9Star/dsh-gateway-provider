@@ -130,13 +130,17 @@ async function testCatalog() {
   const resolved = await adapter.resolveModel(PROVIDER, "deepseek-v4-flash");
   check("deepseek-v4-flash contextWindow from models.dev", resolved.context?.contextWindow === 1_000_000, `context=${resolved.context?.contextWindow}`);
   check("deepseek-v4-flash maxTokens from models.dev", resolved.defaultMaxTokens === 384_000, `maxTokens=${resolved.defaultMaxTokens}`);
-  check("deepseek-v4-flash exposes reasoning efforts", resolved.reasoning?.efforts?.length === 3, JSON.stringify(resolved.reasoning?.efforts?.map((e) => e.id)));
+  // pi-ai 0.84.x catalog: deepseek-v4-flash thinkingLevelMap has low:"low"
+  // enabled (0.82.x had low:null) — supported levels are now off/low/high/max.
+  check("deepseek-v4-flash exposes reasoning efforts", JSON.stringify(resolved.reasoning?.efforts?.map((e) => e.id)) === JSON.stringify(["off", "low", "high", "max"]), JSON.stringify(resolved.reasoning?.efforts?.map((e) => e.id)));
   const mm3Resolved = await adapter.resolveModel(PROVIDER, "MiniMax-M3");
   check("MiniMax-M3 contextWindow from models.dev", mm3Resolved.context?.contextWindow === 512_000, `context=${mm3Resolved.context?.contextWindow}`);
   check("MiniMax-M3 maxTokens from models.dev", mm3Resolved.defaultMaxTokens === 128_000, `maxTokens=${mm3Resolved.defaultMaxTokens}`);
   check("MiniMax-M3 exposes two-state reasoning efforts", mm3Resolved.reasoning?.efforts?.length === 2, JSON.stringify(mm3Resolved.reasoning?.efforts?.map((e) => e.id)));
   check("claude model gets reasoning efforts from pi-ai", JSON.stringify((await adapter.resolveModel(PROVIDER, "claude-opus-4-8")).reasoning?.efforts?.map((e) => e.id)) === JSON.stringify(["off", "minimal", "low", "medium", "high", "xhigh", "max"]));
-  check("glm-5.2-highspeed normalizes to glm-5.2 and inherits its levels", JSON.stringify((await adapter.resolveModel(PROVIDER, "glm-5.2-highspeed")).reasoning?.efforts?.map((e) => e.id)) === JSON.stringify(["off", "low", "medium", "high", "max"]));
+  // pi-ai 0.84.x catalog: glm-5.2 thinkingLevelMap now off:"none", low/medium
+  // null, high:"high", max:"max" — supported levels collapse to off/high/max.
+  check("glm-5.2-highspeed normalizes to glm-5.2 and inherits its levels", JSON.stringify((await adapter.resolveModel(PROVIDER, "glm-5.2-highspeed")).reasoning?.efforts?.map((e) => e.id)) === JSON.stringify(["off", "high", "max"]));
   check("embedding-ish unknown model keeps provider-native reasoning", (await adapter.resolveModel(PROVIDER, "some-unknown-model-xyz")).reasoning === undefined);
   const unknown = await adapter.resolveModel(PROVIDER, "not-a-real-model-xyz");
   check("unlisted model resolves with configured defaults", unknown.context?.contextWindow === 128000, `context=${unknown.context?.contextWindow}`);

@@ -91,11 +91,16 @@ dsh --profile web
 ```sh
 git clone https://github.com/Luck9Star/dsh-gateway-provider
 cd dsh-gateway-provider
-npm run link              # 软链进 dsh profile（保证单实例）
+npm install               # 安装插件自带的 pi-ai 固定副本（直接依赖）
+npm run link              # @deepseek-ai/* 软链进 dsh profile（保证单实例）
 npm run test:client       # 设置页渲染测试，双语言
 npm run test:urls         # URL 派生单元测试
 npm run smoke             # 真实网关往返（需要真 key）
 ```
+
+### 为什么插件自带 pi-ai
+
+`@earendil-works/pi-ai` 是精确锁定的直接依赖，与 harness 自带的 pi-ai 版本解耦：网关模型目录（思考档位、各家 compat，如智谱 GLM 的 `supportsDeveloperRole: false`）不再随 harness 升级被动漂移——harness 旧目录里缺的模型不会再退化请求编码。插件与 harness 的边界只传纯数据（`GenerateOptions` 进、dsh `StreamChunk` 出，`lib/pi-bridge.js` 从不把 pi-ai 对象泄漏到边界外），因此插件副本与 harness 自带副本可在同一进程内安全共存。
 
 从本地检出开发：把 profile 的 `package.json` 指向
 `"dsh-gateway-provider": "link:/绝对/路径"`，然后在 profile 里重跑 `pnpm install`。**不要**再往 profile 自己的 `cordis.patch.yml` 里加 `id: llm-newapi` 行 —— bundle patch 已提供（重复行 = 加载器报错）。
