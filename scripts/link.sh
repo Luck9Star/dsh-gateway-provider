@@ -31,9 +31,11 @@ for CANDIDATE in "${DSH_HOME}/profiles/${PROFILE}/node_modules" "${DSH_HOME}/pro
   fi
 done
 if [ -z "${TARGET}" ]; then
-  echo "error: no profile node_modules with @deepseek-ai packages found under ${DSH_HOME}/profiles" >&2
-  echo "hint: boot the profile once (dsh --profile ${PROFILE}) or run 'dsh plugin --profile ${PROFILE} install'" >&2
-  exit 1
+  # Not an error: CI and other harness-less environments have no profile to
+  # link against (their npm-installed peer copies are exactly what the
+  # offline test suites need). Only a boot on a harness machine completes it.
+  echo "skip: no profile node_modules under ${DSH_HOME}/profiles — leaving @deepseek-ai/* as installed (CI / harness-less environment)"
+  exit 0
 fi
 
 # The plugin must ship its own pi-ai; restore it if node_modules was wiped.
@@ -57,4 +59,4 @@ for PKG in "${PACKAGES[@]}"; do
 done
 
 echo "node_modules ready: @deepseek-ai/* linked to profile, pi-ai pinned locally"
-echo "note: node_modules is gitignored; run 'npm install' + 'bash scripts/link.sh' after cloning."
+echo "note: node_modules is gitignored; 'pnpm install' re-creates everything (prepare runs this script)."

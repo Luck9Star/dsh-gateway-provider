@@ -91,11 +91,10 @@ dsh --profile web
 ```sh
 git clone https://github.com/Luck9Star/dsh-gateway-provider
 cd dsh-gateway-provider
-pnpm install               # 安装插件自带的 pi-ai 固定副本（直接依赖）
-pnpm run link              # @deepseek-ai/* 软链进 dsh profile（保证单实例）
-npm run test:client       # 设置页渲染测试，双语言
-npm run test:urls         # URL 派生单元测试
-npm run smoke             # 真实网关往返（需要真 key）
+pnpm install               # 一条命令搞定:pi-ai 固定副本 + @deepseek-ai/* 软链(prepare 钩子自动执行)
+pnpm run test:client       # 设置页渲染测试，双语言
+pnpm run test:urls         # URL 派生单元测试
+pnpm run smoke             # 真实网关往返（需要真 key）
 ```
 
 ### 为什么插件自带 pi-ai
