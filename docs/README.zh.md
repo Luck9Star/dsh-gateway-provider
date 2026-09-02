@@ -91,8 +91,8 @@ dsh --profile web
 ```sh
 git clone https://github.com/Luck9Star/dsh-gateway-provider
 cd dsh-gateway-provider
-npm install               # 安装插件自带的 pi-ai 固定副本（直接依赖）
-npm run link              # @deepseek-ai/* 软链进 dsh profile（保证单实例）
+pnpm install               # 安装插件自带的 pi-ai 固定副本（直接依赖）
+pnpm run link              # @deepseek-ai/* 软链进 dsh profile（保证单实例）
 npm run test:client       # 设置页渲染测试，双语言
 npm run test:urls         # URL 派生单元测试
 npm run smoke             # 真实网关往返（需要真 key）

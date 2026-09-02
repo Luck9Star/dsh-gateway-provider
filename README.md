@@ -131,8 +131,8 @@ the bridge is lifted from the official `dsh-llm-pi-ai` adapter.
 ```sh
 git clone https://github.com/Luck9Star/dsh-gateway-provider
 cd dsh-gateway-provider
-npm install                # installs the plugin-pinned pi-ai copy (direct dependency)
-npm run link               # symlink @deepseek-ai/* into your dsh profile (single instanceof safety)
+pnpm install               # installs the plugin-pinned pi-ai copy (direct dependency)
+pnpm run link              # symlink @deepseek-ai/* into your dsh profile (single instanceof safety)
 npm run test:client       # settings-UI render, both locales
 npm run test:urls         # URL/derivation units
 npm run smoke             # live gateway round-trip (needs a real key)

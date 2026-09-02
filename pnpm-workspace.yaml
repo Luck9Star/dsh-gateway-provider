@@ -1,0 +1,15 @@
+packages:
+  - .
+allowBuilds:
+  '@google/genai': set this to true or false
+  protobufjs: set this to true or false
+# Harness packages (@deepseek-ai/*) are peerDependencies that MUST resolve to
+# the running harness's own instances (single-copy instanceof safety). pnpm 8+
+# defaults to auto-installing peers from the registry, which would materialize
+# real copies and break that contract — scripts/link.sh symlinks them instead.
+autoInstallPeers: false
+# Mirror the dsh profile layout.
+nodeLinker: hoisted
+# @google/genai and protobufjs ship postinstall scripts pnpm blocks by default;
+# neither script is required for the plugin's runtime path.
+onlyBuiltDependencies: []
