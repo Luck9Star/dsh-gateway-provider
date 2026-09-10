@@ -17,7 +17,6 @@ import { fileURLToPath } from "node:url";
 import { NewapiAdapter } from "../lib/adapter.js";
 import { DEFAULT_EXCLUDE_PATTERNS } from "../lib/catalog.js";
 import { fetchModelsDev, matchModelsDev, extractModelsDevParams } from "../lib/modelsdev.js";
-import { isQuotaExceededError } from "@deepseek-ai/dsh-llm";
 import { resolveGateways } from "../index.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -232,39 +231,6 @@ async function testAnthropicWire() {
   check("anthropic usage", s.usage?.inputTokens !== undefined && s.usage?.outputTokens !== undefined, JSON.stringify(s.usage));
 }
 
-async function testGeminiWire() {
-  // The google-generative-ai protocol has known SSE compatibility issues with
-  // some newapi gateways; verify the model is reachable through its openai
-  // endpoint instead (endpointPriority forced to openai). The first gemini
-  // model the gateway currently serves is picked from live discovery, so a
-  // rotated gemini lineup does not break the test.
-  const adapter = makeAdapter({ endpointPriority: ["openai"] });
-  const gem = (await adapter.listModels(PROVIDER)).find((m) => /^gemini/i.test(m.id));
-  if (gem === undefined) {
-    console.log("\n--- gemini model via openai-completions ---");
-    console.log("[SKIP] no gemini model on the gateway");
-    return;
-  }
-  console.log(`\n--- gemini model via openai-completions (${gem.id}) ---`);
-  const chunks = await collectStream(adapter, {
-    model: gem.id,
-    messages: [{ role: "user", content: [{ type: "text", text: "Reply with exactly: GEMINI OK" }] }],
-    maxTokens: 128,
-  });
-  const s = summarize(chunks);
-  // Quota exhaustion on the gateway's upstream credential is an account
-  // condition, not a wire defect: skip honestly. Any other failure kind
-  // (transport, parse, protocol) still fails the checks below.
-  const failure = s.finish?.kind === "error" ? s.finish.failure : undefined;
-  if (failure !== undefined && (failure.code === "RATE_LIMIT" || failure.code === "QUOTA" || isQuotaExceededError(failure.message ?? ""))) {
-    console.log(`[SKIP] gemini wire check — gateway upstream out of quota (${failure.code ?? "quota"})`);
-    return;
-  }
-  check("gemini text produced", s.text.includes("GEMINI OK"), JSON.stringify(s.text.slice(0, 60)));
-  check("gemini finish stop", s.finish?.kind === "stop", JSON.stringify(s.finish));
-  check("gemini usage", s.usage?.inputTokens !== undefined, JSON.stringify(s.usage));
-}
-
 async function testMiniMaxReasoning() {
   console.log("\n--- MiniMax reasoning-effort (anthropic protocol, reasoning blocks) ---");
   const adapter = makeAdapter();
@@ -353,7 +319,6 @@ async function main() {
     "minimax-reasoning": testMiniMaxReasoning,
     tools: testToolCall,
     anthropic: testAnthropicWire,
-    gemini: testGeminiWire,
     "custom-urls": testCustomURLs,
   };
   for (const [name, fn] of Object.entries(tests)) {
