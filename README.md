@@ -97,7 +97,7 @@ the same keys). The frequently used ones:
 | `gateways` | — | Array of extra gateways: `{ id, baseURL, apiKeyEnv, label, … }`, each becoming a `gateway:<id>` route. |
 | `models` | — | Per-model overrides: `{ id, name, disabled, protocol, contextWindow, maxTokens, reasoningLevels }`. |
 | `useModelsDev` / `modelsUrl` | `true` / models.dev | Parameter enrichment source (supports `file:` URLs for offline). |
-| `excludePatterns` | image/speech/… | Regex list of model ids to keep out of the picker. |
+| `excludePatterns` | image/speech/… | Regex list of model ids to keep out of the picker (matched case-insensitively). |
 | `sortModelsByRelease` | `true` | Newest models first. |
 | `catalogMode` | `auto` | `v1` (`/v1/models` only) / `management` (newapi user API) / `auto`. |
 | `endpointPriority` | responses → anthropic → openai → gemini | Which protocol to prefer when a model supports several. |

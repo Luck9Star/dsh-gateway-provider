@@ -63,7 +63,7 @@ dsh --profile web
 | `gateways` | — | 额外网关数组：`{ id, baseURL, apiKeyEnv, label, … }`，每个成为一条 `gateway:<id>` 路由。 |
 | `models` | — | 按模型覆盖：`{ id, name, disabled, protocol, contextWindow, maxTokens, reasoningLevels }`。 |
 | `useModelsDev` / `modelsUrl` | `true` / models.dev | 参数增补来源（支持 `file:` URL 离线用）。 |
-| `excludePatterns` | 图像/语音/…… | 要从选择器排除的模型 id 正则列表。 |
+| `excludePatterns` | 图像/语音/…… | 要从选择器排除的模型 id 正则列表（不区分大小写）。 |
 | `sortModelsByRelease` | `true` | 最新模型排前面。 |
 | `catalogMode` | `auto` | `v1`（只用 `/v1/models`）/ `management`（newapi 用户 API）/ `auto`。 |
 | `endpointPriority` | responses → anthropic → openai → gemini | 模型支持多种协议时的优先序。 |

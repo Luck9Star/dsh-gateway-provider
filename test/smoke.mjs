@@ -15,6 +15,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { NewapiAdapter } from "../lib/adapter.js";
+import { DEFAULT_EXCLUDE_PATTERNS } from "../lib/catalog.js";
+import { fetchModelsDev, matchModelsDev, extractModelsDevParams } from "../lib/modelsdev.js";
+import { isQuotaExceededError } from "@deepseek-ai/dsh-llm";
 import { resolveGateways } from "../index.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -61,11 +64,7 @@ function makeAdapter(overrides = {}) {
     catalogMode: "auto",
     catalogTtlMs: 30 * 60 * 1000,
     includeChatOnly: true,
-    excludePatterns: [
-      "(^|/|-)image", "(^|/|-)speech", "(^|/|-)audio", "(^|/|-)video",
-      "(^|/|-)embed", "(^|/|-)rerank", "(^|/)bge-", "(^|/)text-embedding",
-      "(^|/|-)moderation", "(^|/|-)tts", "(^|/|-)stt", "(^|/|-)whisper",
-    ],
+    excludePatterns: DEFAULT_EXCLUDE_PATTERNS,
     endpointPriority: ["openai-response", "anthropic", "openai", "gemini"],
     userId: "1",
     modelOverrides: {},
@@ -134,8 +133,13 @@ async function testCatalog() {
   // enabled (0.82.x had low:null) — supported levels are now off/low/high/max.
   check("deepseek-v4-flash exposes reasoning efforts", JSON.stringify(resolved.reasoning?.efforts?.map((e) => e.id)) === JSON.stringify(["off", "low", "high", "max"]), JSON.stringify(resolved.reasoning?.efforts?.map((e) => e.id)));
   const mm3Resolved = await adapter.resolveModel(PROVIDER, "MiniMax-M3");
-  check("MiniMax-M3 contextWindow from models.dev", mm3Resolved.context?.contextWindow === 512_000, `context=${mm3Resolved.context?.contextWindow}`);
-  check("MiniMax-M3 maxTokens from models.dev", mm3Resolved.defaultMaxTokens === 128_000, `maxTokens=${mm3Resolved.defaultMaxTokens}`);
+  // Compare against the cached models.dev snapshot the enrichment itself used
+  // (fetchModelsDev shares the module-level cache), so this tracks upstream
+  // data instead of a hardcoded value that drifts.
+  const modelsDevRaw = await fetchModelsDev(env.NEWAPI_MODELS_URL ?? "https://models.dev/models.json");
+  const mm3Params = extractModelsDevParams(matchModelsDev(modelsDevRaw, "MiniMax-M3"));
+  check("MiniMax-M3 contextWindow from models.dev", mm3Resolved.context?.contextWindow === mm3Params.contextWindow, `context=${mm3Resolved.context?.contextWindow} expected=${mm3Params.contextWindow}`);
+  check("MiniMax-M3 maxTokens from models.dev", mm3Resolved.defaultMaxTokens === mm3Params.maxTokens, `maxTokens=${mm3Resolved.defaultMaxTokens} expected=${mm3Params.maxTokens}`);
   check("MiniMax-M3 exposes two-state reasoning efforts", mm3Resolved.reasoning?.efforts?.length === 2, JSON.stringify(mm3Resolved.reasoning?.efforts?.map((e) => e.id)));
   check("claude model gets reasoning efforts from pi-ai", JSON.stringify((await adapter.resolveModel(PROVIDER, "claude-opus-4-8")).reasoning?.efforts?.map((e) => e.id)) === JSON.stringify(["off", "minimal", "low", "medium", "high", "xhigh", "max"]));
   // pi-ai 0.84.x catalog: glm-5.2 thinkingLevelMap now off:"none", low/medium
@@ -229,17 +233,33 @@ async function testAnthropicWire() {
 }
 
 async function testGeminiWire() {
-  console.log("\n--- gemini model via openai-completions (gemini-2.5-flash) ---");
   // The google-generative-ai protocol has known SSE compatibility issues with
   // some newapi gateways; verify the model is reachable through its openai
-  // endpoint instead (endpointPriority forced to openai).
+  // endpoint instead (endpointPriority forced to openai). The first gemini
+  // model the gateway currently serves is picked from live discovery, so a
+  // rotated gemini lineup does not break the test.
   const adapter = makeAdapter({ endpointPriority: ["openai"] });
+  const gem = (await adapter.listModels(PROVIDER)).find((m) => /^gemini/i.test(m.id));
+  if (gem === undefined) {
+    console.log("\n--- gemini model via openai-completions ---");
+    console.log("[SKIP] no gemini model on the gateway");
+    return;
+  }
+  console.log(`\n--- gemini model via openai-completions (${gem.id}) ---`);
   const chunks = await collectStream(adapter, {
-    model: "gemini-2.5-flash",
+    model: gem.id,
     messages: [{ role: "user", content: [{ type: "text", text: "Reply with exactly: GEMINI OK" }] }],
     maxTokens: 128,
   });
   const s = summarize(chunks);
+  // Quota exhaustion on the gateway's upstream credential is an account
+  // condition, not a wire defect: skip honestly. Any other failure kind
+  // (transport, parse, protocol) still fails the checks below.
+  const failure = s.finish?.kind === "error" ? s.finish.failure : undefined;
+  if (failure !== undefined && (failure.code === "RATE_LIMIT" || failure.code === "QUOTA" || isQuotaExceededError(failure.message ?? ""))) {
+    console.log(`[SKIP] gemini wire check — gateway upstream out of quota (${failure.code ?? "quota"})`);
+    return;
+  }
   check("gemini text produced", s.text.includes("GEMINI OK"), JSON.stringify(s.text.slice(0, 60)));
   check("gemini finish stop", s.finish?.kind === "stop", JSON.stringify(s.finish));
   check("gemini usage", s.usage?.inputTokens !== undefined, JSON.stringify(s.usage));
