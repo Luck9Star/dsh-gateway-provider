@@ -31,7 +31,6 @@ import z from "@deepseek-ai/schemastery";
 import { LlmError, RetryPolicySchema, assertUsableApiKey, resolveRetryPolicy } from "@deepseek-ai/dsh-llm";
 import { credentialRef } from "@deepseek-ai/dsh-credentials";
 import { launchEnvironmentOf } from "@deepseek-ai/dsh-launch-environment";
-import { deepEqualJson, installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
 import { MAX_TIMER_DELAY_MS } from "@deepseek-ai/dsh-timeout";
 import { NewapiAdapter } from "./lib/adapter.js";
 import { DEFAULT_EXCLUDE_PATTERNS, DEFAULT_MAX_TOKENS, DEFAULT_CONTEXT_WINDOW } from "./lib/catalog.js";
@@ -41,7 +40,7 @@ export const name = "llm-newapi";
 export const inject = ["llm"];
 
 /** User-settings namespace whose section overrides this entry. */
-const NS = settingsNamespace("llm-newapi");
+const NS = "llm-newapi";
 /** The legacy single provider route (kept for backwards compatibility). */
 export const PROVIDER = "newapi";
 /** Prefix for additional gateway routes. */
@@ -373,7 +372,7 @@ export function apply(ctx, config) {
     // Include the per-protocol bases: URL-addressed (custom) gateways may
     // share an empty plain baseURL, and URL-only edits must re-register.
     const facts = gateways.map((g) => `${g.provider}:${g.connection.baseURL}:${g.label}:${g.connection.apiBases ? JSON.stringify(g.connection.apiBases) : ""}`);
-    if (deepEqualJson(facts, directoryFacts)) return;
+    if (directoryFacts !== undefined && JSON.stringify(facts) === JSON.stringify(directoryFacts)) return;
     const entries = gateways.map((g, i) => ({
       provider: g.provider,
       displayName: g.label,
@@ -413,10 +412,12 @@ export function apply(ctx, config) {
     }
   });
 
-  installSettingsSection(ctx, NS, Config, config, {
-    setSource: (source) => {
-      current = source;
-    },
-    onChange: ensureRegistration,
+  ctx.inject(["settings"], (settingsCtx) => {
+    settingsCtx.settings.installSection(ctx, NS, Config, config, {
+      setSource: (source) => {
+        current = source;
+      },
+      onChange: ensureRegistration,
+    });
   });
 }
