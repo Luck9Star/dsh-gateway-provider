@@ -6,6 +6,8 @@
  */
 import { deriveProtocolURLs, effectiveEndpointTypes } from "../lib/protocols.js";
 import { resolveGateways } from "../index.js";
+import { discoverGatewayModels } from "../lib/catalog.js";
+import http from "node:http";
 
 let failed = false;
 const check = (label, actual, expected) => {
@@ -106,5 +108,41 @@ check("root protocol URLs replace the default base",
 check("plain config still falls back to the public cloud",
 	byRoute({}, "newapi").connection.baseURL,
 	"https://api.newapi.ai");
+
+// ---- issue #3: baseURL ending in /v1 must not double the version segment ----
+// The catalog always appends its own full paths (/v1/models, /api/user/models),
+// so a versioned base (accepted verbatim by the chat path's OpenAI-SDK
+// convention) is stripped before discovery. Verified against a live local
+// server recording the exact request path per base form.
+{
+	const hits = [];
+	// The management API answers a flat id list; /v1/models answers objects.
+	let flatMode = false;
+	const server = http.createServer((req, res) => {
+		hits.push(req.url);
+		res.setHeader("content-type", "application/json");
+		res.end(JSON.stringify({ data: flatMode ? ["probe-model"] : [{ id: "probe-model" }] }));
+	});
+	await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+	const port = server.address().port;
+	const probe = async (config, label, expectedPath) => {
+		hits.length = 0;
+		flatMode = config.catalogMode === "management";
+		const gw = byRoute(config, config.gateways ? "gateway:extra" : "newapi");
+		const models = await discoverGatewayModels(gw.connection, "test-key");
+		const got = `${hits[0] ?? "(no request)"} → ${models.length} model(s)`;
+		check(label, got, `${expectedPath} → 1 model(s)`);
+	};
+	try {
+		await probe({ baseURL: `http://127.0.0.1:${port}` }, "bare host hits /v1/models", "/v1/models");
+		await probe({ baseURL: `http://127.0.0.1:${port}/v1` }, "versioned base hits /v1/models once (issue #3)", "/v1/models");
+		await probe({ baseURL: `http://127.0.0.1:${port}/v1/` }, "trailing slash + version tolerated", "/v1/models");
+		await probe({ baseURL: `http://127.0.0.1:${port}/v2` }, "other version segments stripped too", "/v1/models");
+		await probe({ baseURL: `http://127.0.0.1:${port}/v1`, catalogMode: "management" }, "management mode with versioned base hits /api/user/models (issue #3)", "/api/user/models");
+		await probe({ gateways: [{ id: "extra", baseURL: `http://127.0.0.1:${port}/v1` }] }, "gateways[] entry with versioned base hits /v1/models (issue #3)", "/v1/models");
+	} finally {
+		server.close();
+	}
+}
 
 process.exit(failed ? 1 : 0);
