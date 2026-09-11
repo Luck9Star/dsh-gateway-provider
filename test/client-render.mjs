@@ -50,7 +50,7 @@ function loadModule(language, snapshot, api) {
 		__ModuleLoader__: { load(def) { moduleExports = def.factory((n) => (n === "react" ? React : (() => { throw new Error("unexpected require " + n); }))); } },
 	};
 	(0, eval)(SOURCE);
-	moduleExports.apply({ get: (name) => (name === "slots" ? slots : name === "connection" ? { api } : undefined) });
+	moduleExports.apply({ get: (name) => (name === "slots" ? slots : name === "remote.settings" ? api.settings : name === "remote.credentials" ? api.credentials : name === "remote.llm" ? api.llm : name === "remote" ? {} : undefined) });
 	if (!captured) throw new Error("settings.section not registered for " + language);
 	return { captured, moduleExports };
 }
@@ -70,14 +70,14 @@ const snapshot = {
 };
 const api = {
 	settings: {
-		describe: async () => ({ result: { ok: true, value: { namespaces: [{ ns: "llm-newapi", value: snapshot }] } } }),
-		mutate: async () => ({ result: { ok: true } }),
+		describe: async () => ({ ok: true, value: { namespaces: [{ ns: "llm-newapi", value: snapshot }] } }),
+		mutate: async () => ({ ok: true }),
 	},
 	credentials: {
-		describe: async () => ({ result: { ok: true, value: { credentials: { MY_KEY: { configured: true }, BACKUP_KEY: { configured: false } } } } }),
-		set: async () => ({ result: { ok: true } }),
+		describe: async () => ({ ok: true, value: { MY_KEY: { configured: true }, BACKUP_KEY: { configured: false } } }),
+		set: async () => ({ ok: true }),
 	},
-	llm: { discoverModels: async () => ({ result: { ok: true, value: { models: [{ id: "x", name: "X", contextWindow: 1000, maxTokens: 100, protocol: "openai", reasoning: false }] } } }) },
+	llm: { discoverModels: async () => ({ ok: true, value: [{ id: "x", name: "X", contextWindow: 1000, maxTokens: 100, protocol: "openai", reasoning: false }] }) },
 };
 
 let failed = false;
