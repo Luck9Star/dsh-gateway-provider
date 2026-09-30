@@ -52,7 +52,7 @@ dsh --profile web
 
 ## 配置参考
 
-全部可选 —— 下表每项都有可用默认值。配置写在 `~/.dsh/settings.yaml` 的 `llm-newapi:` 段（设置页改的就是同一批键）。常用项：
+全部可选 —— 下表每项都有可用默认值。dsh ≥ 0.2 配置存在 profile 的 `llm-newapi` entry（`~/.dsh/profiles/<name>/cordis.patch.yml`，设置页改的就是同一份数据）；旧版 `~/.dsh/settings.yaml` 的 `llm-newapi:` 段会在插件可加载后的首次启动自动迁入。常用项：
 
 | 键 | 默认值 | 含义 |
 | --- | --- | --- |

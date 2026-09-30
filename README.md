@@ -84,9 +84,11 @@ Everything lives in **Settings → Gateway Models**:
 
 ## Configuration reference
 
-Optional — everything below has a working default. Config lives in the
-`llm-newapi:` section of `~/.dsh/settings.yaml` (the settings page edits
-the same keys). The frequently used ones:
+Optional — everything below has a working default. With dsh ≥ 0.2 config
+lives in the `llm-newapi` entry of the profile
+(`~/.dsh/profiles/<name>/cordis.patch.yml`; the settings page edits the same
+data). A pre-0.2 `~/.dsh/settings.yaml` section is imported automatically on
+the first start where the plugin loads. The frequently used ones:
 
 | Key | Default | Meaning |
 | --- | --- | --- |

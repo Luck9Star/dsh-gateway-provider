@@ -39,7 +39,11 @@ import { DEFAULT_ENDPOINT_PRIORITY, deriveProtocolURLs } from "./lib/protocols.j
 export const name = "llm-newapi";
 export const inject = ["llm"];
 
-/** User-settings namespace whose section overrides this entry. */
+/**
+ * Settings namespace this plugin serves. dsh 0.2 keys settings (and model
+ * discovery) by the loader entry id; cordis.patch.yml declares the entry as
+ * `llm-newapi`, so the ids coincide and this remains the fallback name.
+ */
 const NS = "llm-newapi";
 /** The legacy single provider route (kept for backwards compatibility). */
 export const PROVIDER = "newapi";
@@ -60,7 +64,8 @@ const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 600_000;
 const DEFAULT_CATALOG_TTL_MS = 30 * 60 * 1000;
 
 /**
- * String field tolerant of hand-edited YAML scalars. `settings.yaml` is a
+ * String field tolerant of hand-edited YAML scalars. The profile patch
+ * (`cordis.patch.yml`, and pre-0.2 `settings.yaml` imports) is a
  * user-editable document parsed with YAML 1.2 core semantics: an unquoted
  * `true` / `false` / `True` / `FALSE` round-trips as a boolean and an
  * unquoted digit run as a number, long before the value reaches a strict
@@ -183,7 +188,7 @@ export const Config = z.object({
   // ---- Additional gateways ----
   /** Additional gateways; each becomes a `gateway:<id>` provider route. */
   gateways: z.array(GatewaySchema).default([]),
-});
+}).volatile();
 
 /**
  * Normalize one gateway entry into the connection facts the adapter needs.
@@ -306,7 +311,12 @@ export function resolveGateways(config, environment) {
 }
 
 export function apply(ctx, config) {
-  let current = () => config;
+  /** Settings namespace this entry serves: the loader entry id, else the legacy name. */
+  const settingsNs = ctx.fiber.entry?.options.id ?? NS;
+  // dsh 0.2 hands apply() a volatile config reference (a frozen { get } whose
+  // snapshot updates after every settings write); plain objects from older
+  // harnesses pass through unchanged.
+  const current = () => (typeof config?.get === "function" ? config.get() : config);
   let lastRaw;
   let resolved = null;
   /** Resolve (and cache) the gateway list from the current config snapshot. */
@@ -376,7 +386,7 @@ export function apply(ctx, config) {
     const entries = gateways.map((g, i) => ({
       provider: g.provider,
       displayName: g.label,
-      settingsNs: NS,
+      settingsNs,
       settingsPath: i === 0 ? [] : ["gateways", String(g.id)],
       declared: i > 0,
     }));
@@ -390,7 +400,7 @@ export function apply(ctx, config) {
   ensureRegistration();
 
   /** Expose model discovery so the web UI can fetch a gateway's model list. */
-  ctx.llm.registerModelDiscovery(NS, async (request) => {
+  ctx.llm.registerModelDiscovery(settingsNs, async (request) => {
     const env = launchEnvironmentOf(ctx);
     const gateways = resolve();
     const gw = request.provider !== undefined ? gateways.find((g) => g.provider === request.provider) : gateways[0];
@@ -412,12 +422,18 @@ export function apply(ctx, config) {
     }
   });
 
-  ctx.inject(["settings"], (settingsCtx) => {
-    settingsCtx.settings.installSection(ctx, NS, Config, config, {
-      setSource: (source) => {
-        current = source;
-      },
-      onChange: ensureRegistration,
-    });
+  // dsh 0.2 settings contract: the volatile-marked Config schema is picked
+  // up by the settings service automatically (installSection is gone). Settings
+  // writes land in the profile and the loader emits loader/volatile-update;
+  // re-resolve and re-register then. resolve() holds the last good snapshot
+  // when an update arrives invalid, so the catch only guards registration
+  // races (e.g. a provider-route conflict on a mid-flight update).
+  ctx.on("loader/volatile-update", () => {
+    try {
+      ensureRegistration();
+    } catch (error) {
+      ctx.logger.error("llm-newapi: keeping the last good configuration after a settings update");
+      ctx.logger.error(error);
+    }
   });
 }

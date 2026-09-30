@@ -1,8 +1,9 @@
 /**
  * Schema tolerance regression tests for the `llm-newapi` settings section.
  *
- * `settings.yaml` is a hand-editable YAML document, and the settings seam
- * refuses to register a namespace whose stored section fails its schema —
+ * The profile patch (and imported pre-0.2 `settings.yaml` values) is a
+ * hand-editable YAML document, and the loader refuses an entry whose stored
+ * config fails its schema —
  * one stray scalar anywhere bricks the whole namespace (every web-UI write
  * then answers `settings-rejected: settings namespace "llm-newapi" is not
  * registered`). These tests pin the coercion contract:
@@ -33,7 +34,10 @@ function check(name, ok, detail = "") {
 function accepts(name, input, probe) {
   try {
     const resolved = Config(input);
-    check(name, true, probe ? probe(resolved) : "");
+    // dsh 0.2: the root-volatile Config resolves to a { get } reference; the
+    // plain validation output (defaults applied, coercions done) is behind get().
+    const value = typeof resolved?.get === "function" ? resolved.get() : resolved;
+    check(name, true, probe ? probe(value) : "");
   } catch (error) {
     check(name, false, error?.message ?? String(error));
   }
