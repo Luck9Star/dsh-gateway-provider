@@ -56,7 +56,7 @@ dsh --profile web
 
 | 键 | 默认值 | 含义 |
 | --- | --- | --- |
-| `baseURL` | `https://api.newapi.ai` | 网关 base URL。环境变量兜底：`NEWAPI_BASE_URL`、`NEWAPI_API_URL`。 |
+| `baseURL` | `https://api.newapi.ai` | 网关 base URL。环境变量兜底：`NEWAPI_BASE_URL`、`NEWAPI_API_URL`。结尾带 `/v1` 或 `/v1beta` 均可（发现时会剥掉）；Gemini 请求固定发往 `{base}/v1beta/models/…`。 |
 | `apiKeyEnv` | `NEWAPI_API_KEY` | key 存在哪个环境/凭据变量里。 |
 | `label` | `NewAPI` | 选择器里显示的路由名。 |
 | `flavor` | `newapi` | 仅作模板标签（`newapi` / `litellm` / `higress` / `openai-compatible` / `custom`）。 |
@@ -67,7 +67,7 @@ dsh --profile web
 | `sortModelsByRelease` | `true` | 最新模型排前面。 |
 | `catalogMode` | `auto` | `v1`（只用 `/v1/models`）/ `management`（newapi 用户 API）/ `auto`。 |
 | `endpointPriority` | responses → anthropic → openai → gemini | 模型支持多种协议时的优先序。 |
-| `openaiURL` / `responsesURL` / `anthropicURL` | — | 仅完全自定义网关：按协议分别填端点 URL；不填 = 该协议关闭。 |
+| `openaiURL` / `responsesURL` / `anthropicURL` / `geminiURL` | — | 仅完全自定义网关：按协议分别填端点 URL；不填 = 该协议关闭。`geminiURL` 可填裸主机名、`…/v1beta` 或 `…/v1beta/models` —— `/v1beta` 段会自动确保（pi-ai 要求它含在 base 里）。 |
 | `maxTokens` / `defaultContextWindow` | `32768` / `128000` | models.dev 无数据时的兜底。 |
 | `streamIdleTimeoutMs` | `600000` | 流式空闲超时。 |
 | `headers` | — | 发往网关的额外 HTTP 头。 |
@@ -80,7 +80,8 @@ dsh --profile web
 | 每次请求都 `401` / 鉴权错误 | key 缺失或不对：看 Settings → Gateway Models 的徽标，或 `~/.dsh/.credentials.yaml` 里的 `NEWAPI_API_KEY`。 |
 | 某模型的上下文窗口看着不对 | models.dev 没匹配上。在设置页编辑该模型（或写 `models:` 覆盖）。 |
 | 单个模型工具调用不稳、格式怪 | 该模型被路由到了它处理不好的协议。在模型上钉死 `protocol`（`openai`、`openai-response`、`anthropic`、`gemini`）。 |
-| 自定义网关各协议端点分开 | 用 `flavor: "custom"`，显式填 `openaiURL` / `responsesURL` / `anthropicURL`。 |
+| 自定义网关各协议端点分开 | 用 `flavor: "custom"`，显式填 `openaiURL` / `responsesURL` / `anthropicURL` / `geminiURL`。 |
+| Gemini 模型返回 HTML / `Unexpected token '<'`（issue #4） | 网关把 Gemini 挂在 `/v1beta` 下；1.1.2 已修复 —— 普通 `baseURL` 也会把 Gemini 请求发到 `{base}/v1beta/models/…`（`baseURL` 以 `/v1beta` 结尾同样可用）。旧版本没有任何绕过手段，请升级插件。 |
 
 ## 工作原理（一分钟版）
 

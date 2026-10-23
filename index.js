@@ -4,7 +4,8 @@
  * Registers one or more `gateway:*` provider routes on `ctx.llm`, each backed
  * by an OpenAI-compatible `/v1/models` gateway (newapi, LiteLLM, Higress, or
  * any generic gateway), or by a fully-custom gateway whose per-protocol
- * endpoint URLs (`openaiURL` / `responsesURL` / `anthropicURL`) are written
+ * endpoint URLs (`openaiURL` / `responsesURL` / `anthropicURL` / `geminiURL`)
+ * are written
  * out in full. Backwards-compatible with the original single-connection
  * `newapi` route: the legacy flat fields (`baseURL`, `apiKeyEnv`, …) build a
  * default gateway, while the `gateways` array adds more.
@@ -121,6 +122,12 @@ const GatewaySchema = z.object({
   responsesURL: coercedString(),
   /** Full Anthropic messages endpoint URL (custom template). */
   anthropicURL: coercedString(),
+  /**
+   * Gemini native endpoint base (custom template): a bare host, a base
+   * ending in `/v1beta`, or one with a trailing `/models`. The `/v1beta`
+   * segment is ensured — pi-ai's Gemini client expects it in the base.
+   */
+  geminiURL: coercedString(),
   /** Environment-variable name (credential ref) holding the API key. */
   apiKeyEnv: coercedString().role("credential-ref"),
   /** Gateway type label (newapi/litellm/higress/openai-compatible/custom). */
@@ -149,6 +156,8 @@ export const Config = z.object({
   responsesURL: coercedString(),
   /** Full Anthropic messages endpoint URL (custom template for the default gateway). */
   anthropicURL: coercedString(),
+  /** Gemini native endpoint base (custom template for the default gateway). */
+  geminiURL: coercedString(),
   /** Gateway type label shown in the UI (newapi/litellm/higress/openai-compatible/custom). */
   flavor: z.union(FLAVORS).default("newapi"),
   /** models.dev catalog URL (any fetch-able URL; file: works for offline mirrors). */
@@ -193,7 +202,8 @@ export const Config = z.object({
 /**
  * Normalize one gateway entry into the connection facts the adapter needs.
  * Per-gateway fields fall back to the shared defaults. Protocol URL fields
- * (`openaiURL` / `responsesURL` / `anthropicURL`, the "custom" template)
+ * (`openaiURL` / `responsesURL` / `anthropicURL` / `geminiURL`, the "custom"
+ * template)
  * redefine the gateway's protocol surface: each configured URL becomes the
  * exact SDK base for its wire protocol, unconfigured protocols are
  * unavailable, and the plain `baseURL` is no longer inherited from the
@@ -290,6 +300,7 @@ export function resolveGateways(config, environment) {
       openaiURL: config.openaiURL,
       responsesURL: config.responsesURL,
       anthropicURL: config.anthropicURL,
+      geminiURL: config.geminiURL,
     }, defaults, PROVIDER, defaultLabel) },
   ];
   // Additional gateways from the array.

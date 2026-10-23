@@ -92,7 +92,7 @@ the first start where the plugin loads. The frequently used ones:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `baseURL` | `https://api.newapi.ai` | Your gateway's base URL. Env fallbacks: `NEWAPI_BASE_URL`, `NEWAPI_API_URL`. |
+| `baseURL` | `https://api.newapi.ai` | Your gateway's base URL. Env fallbacks: `NEWAPI_BASE_URL`, `NEWAPI_API_URL`. A trailing `/v1` or `/v1beta` is tolerated (stripped for discovery); Gemini requests always go to `{base}/v1beta/models/…`. |
 | `apiKeyEnv` | `NEWAPI_API_KEY` | Which env/credential variable holds the key. |
 | `label` | `NewAPI` | Route label shown in the picker. |
 | `flavor` | `newapi` | Template label only (`newapi` / `litellm` / `higress` / `openai-compatible` / `custom`). |
@@ -103,7 +103,7 @@ the first start where the plugin loads. The frequently used ones:
 | `sortModelsByRelease` | `true` | Newest models first. |
 | `catalogMode` | `auto` | `v1` (`/v1/models` only) / `management` (newapi user API) / `auto`. |
 | `endpointPriority` | responses → anthropic → openai → gemini | Which protocol to prefer when a model supports several. |
-| `openaiURL` / `responsesURL` / `anthropicURL` | — | Fully-custom gateways only: per-protocol endpoint URLs; unset = that protocol off. |
+| `openaiURL` / `responsesURL` / `anthropicURL` / `geminiURL` | — | Fully-custom gateways only: per-protocol endpoint URLs; unset = that protocol off. `geminiURL` may be a bare host, `…/v1beta`, or `…/v1beta/models` — the `/v1beta` segment is ensured (pi-ai expects it in the base). |
 | `maxTokens` / `defaultContextWindow` | `32768` / `128000` | Fallbacks when models.dev has no data. |
 | `streamIdleTimeoutMs` | `600000` | Idle timeout while streaming. |
 | `headers` | — | Extra HTTP headers sent to the gateway. |
@@ -116,7 +116,8 @@ the first start where the plugin loads. The frequently used ones:
 | `401` / auth errors on every request | Key missing or wrong: check the badge in Settings → Gateway Models, or `NEWAPI_API_KEY` in `~/.dsh/.credentials.yaml`. |
 | A model's context window looks wrong | models.dev had no match. Edit the model on the settings page (or a `models:` override). |
 | Wrong format answers / tool calls flaky for one model | That model is routed over a protocol it handles poorly. Pin `protocol` on the model (`openai`, `openai-response`, `anthropic`, `gemini`). |
-| Custom gateway with separate endpoints | Use `flavor: "custom"` and set `openaiURL` / `responsesURL` / `anthropicURL` explicitly. |
+| Custom gateway with separate endpoints | Use `flavor: "custom"` and set `openaiURL` / `responsesURL` / `anthropicURL` / `geminiURL` explicitly. |
+| Gemini model returns HTML / `Unexpected token '<'` (issue #4) | The gateway serves Gemini under `/v1beta`; fixed in 1.1.2 — a plain `baseURL` now sends Gemini to `{base}/v1beta/models/…` (a `baseURL` ending in `/v1beta` also works). No older-version workaround exists; update the plugin. |
 
 ## How it works (one minute version)
 

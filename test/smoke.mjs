@@ -231,6 +231,60 @@ async function testAnthropicWire() {
   check("anthropic usage", s.usage?.inputTokens !== undefined && s.usage?.outputTokens !== undefined, JSON.stringify(s.usage));
 }
 
+async function testGeminiWire() {
+  console.log("\n--- gemini protocol: native /v1beta (issue #4) ---");
+  // Issue #4 regression: the connection carries a BARE host baseURL — exactly
+  // the reported config. pi-ai's Gemini client pins apiVersion = "" when a
+  // baseUrl is set, so the model's base must end in /v1beta; without it the
+  // gateway answers its HTML UI with HTTP 200 and the SDK dies parsing JSON
+  // out of "<!doctype html>".
+  const candidates = ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-flash-latest", "gemini-pro-latest"];
+  const listed = await makeAdapter().listModels(PROVIDER);
+  const model = candidates.find((id) => listed.some((m) => m.id === id));
+  if (model === undefined) {
+    console.log("[SKIP] no gemini model on this gateway");
+    return;
+  }
+  // Pin the protocol so endpointPriority cannot route the model over openai.
+  const adapter = makeAdapter({ modelOverrides: { [model]: { protocol: "gemini" } } });
+  const chunks = await collectStream(adapter, {
+    model,
+    messages: [{ role: "user", content: [{ type: "text", text: "Reply with exactly: GEMINI OK" }] }],
+    maxTokens: 128,
+  });
+  const s = summarize(chunks);
+  check("gemini text produced (bare baseURL → /v1beta)", s.text.includes("GEMINI OK"), JSON.stringify(s.text.slice(0, 60)));
+  check("gemini finish stop", s.finish?.kind === "stop", JSON.stringify(s.finish));
+  check("gemini usage", s.usage?.inputTokens !== undefined && s.usage?.outputTokens !== undefined, JSON.stringify(s.usage));
+
+  // Same wire over the custom template's geminiURL with a bare host: the
+  // derivation itself must ensure the /v1beta segment (pi-ai convention).
+  // A gemini-only custom gateway has no OpenAI-shaped discovery base, so the
+  // model is declared in config (the documented custom-template flow).
+  const base = BASE_URL.replace(/\/+$/, "");
+  const gws = resolveGateways({
+    gateways: [{ id: "gm", flavor: "custom", geminiURL: base, models: [{ id: model, protocol: "gemini" }] }],
+  }, { get: () => undefined });
+  const conn = gws.find((g) => g.provider === "gateway:gm").connection;
+  check("geminiURL bare host derives a /v1beta base",
+    conn.apiBases?.["google-generative-ai"] === `${base}/v1beta`, JSON.stringify(conn.apiBases));
+  check("geminiURL availability is exactly gemini", JSON.stringify(conn.availableTypes) === JSON.stringify(["gemini"]), JSON.stringify(conn.availableTypes));
+  const gmAdapter = new NewapiAdapter({
+    options: () => conn,
+    resolveApiKey: async () => API_KEY,
+    providerInfo: () => ({ id: "gateway:gm", name: "Gemini URLs" }),
+    providerCache: new Map(),
+    resolveAttachments: () => undefined,
+  });
+  const chunks2 = await collectStream(gmAdapter, {
+    model,
+    messages: [{ role: "user", content: [{ type: "text", text: "Reply with exactly: GEMINI URL OK" }] }],
+    maxTokens: 128,
+  });
+  const s2 = summarize(chunks2);
+  check("geminiURL streams native generateContent", s2.text.includes("GEMINI URL OK"), JSON.stringify(s2.text.slice(0, 60)));
+}
+
 async function testMiniMaxReasoning() {
   console.log("\n--- MiniMax reasoning-effort (anthropic protocol, reasoning blocks) ---");
   const adapter = makeAdapter();
@@ -319,6 +373,7 @@ async function main() {
     "minimax-reasoning": testMiniMaxReasoning,
     tools: testToolCall,
     anthropic: testAnthropicWire,
+    gemini: testGeminiWire,
     "custom-urls": testCustomURLs,
   };
   for (const [name, fn] of Object.entries(tests)) {
