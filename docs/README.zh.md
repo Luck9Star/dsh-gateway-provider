@@ -42,6 +42,46 @@ dsh --profile web
 
 **预期结果：** 模型选择器多出一条 "NewAPI" 路由，列出网关的对话模型，最新在前。在网关卡片上点 **Test** —— 应显示 `✓ Connected — N models`。用的不是 newapi 公有云？先在卡片上改 **Base URL**（或配置里的 `baseURL`）指向你自己的网关地址。
 
+## 终端 / 无界面（headless）
+
+本插件的 host 半边（`llm-newapi` provider 路由）在任意 profile 都能用 ——
+包括终端 / TUI（例如 [dsh-tui](https://github.com/ccch1mneyyy/dsh-TUI)）。
+**Settings → Gateway Models 仅限 web**；没有 web UI 时，通过在 profile
+patch 里覆盖 bundle 插入的 `llm-newapi` 条目来配置网关。patch 层会整段
+替换 `config`，所以要把整个块写全：
+
+```yaml
+# ~/.dsh/profiles/<name>/cordis.patch.yml
+# 按 id 覆盖 —— 不要再 insert 第二条 llm-newapi（重复行 = 加载器报错）。
+- id: llm-newapi
+  config:
+    label: My Gateway
+    baseURL: https://gw.example.com
+    apiKeyEnv: GW_API_KEY
+    models:
+      - id: some-model
+        protocol: gemini
+```
+
+密钥按 `apiKeyEnv` 里的名字存放（规则与「安装」一节相同）：
+
+```sh
+echo "GW_API_KEY: sk-REPLACE_WITH_YOUR_KEY" >> ~/.dsh/.credentials.yaml
+# 或: export GW_API_KEY=sk-REPLACE_WITH_YOUR_KEY
+```
+
+装到非 web profile 时同样操作，换成对应 profile 名即可：
+
+```sh
+dsh plugin --profile dsh-tui add dsh-gateway-provider
+```
+
+重启后，网关模型会出现在 TUI 的模型选择器里。连接测试 / 同步 /
+按模型编辑仍需要 web 设置页（或手工改上面的 YAML）。之后可能会加终端内
+设置面（`tuiSettingsSections`，见
+[#5](https://github.com/Luck9Star/dsh-gateway-provider/issues/5)）覆盖标量
+字段；在那之前，YAML 覆盖就是受支持的用法。
+
 ## 日常使用
 
 一切都在 **Settings → Gateway Models**：
