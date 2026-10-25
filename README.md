@@ -66,6 +66,48 @@ it should answer `✓ Connected — N models`. Not using the public newapi
 cloud? Set **Base URL** on the card (or `baseURL` in config) to your own
 gateway address first.
 
+## Terminal / headless
+
+The host half of this plugin (the `llm-newapi` provider route) works in any
+profile — including terminal / TUI setups such as
+[dsh-tui](https://github.com/ccch1mneyyy/dsh-TUI). **Settings → Gateway
+Models is web-only**; without the web UI you configure the gateway by
+overriding the bundle's `llm-newapi` entry in the profile patch. A patch
+layer replaces `config` wholesale, so write the whole block out:
+
+```yaml
+# ~/.dsh/profiles/<name>/cordis.patch.yml
+# Override by id — do not insert a second llm-newapi row (duplicate = loader error).
+- id: llm-newapi
+  config:
+    label: My Gateway
+    baseURL: https://gw.example.com
+    apiKeyEnv: GW_API_KEY
+    models:
+      - id: some-model
+        protocol: gemini
+```
+
+Store the key under the name in `apiKeyEnv` (same rules as Install):
+
+```sh
+echo "GW_API_KEY: sk-REPLACE_WITH_YOUR_KEY" >> ~/.dsh/.credentials.yaml
+# or: export GW_API_KEY=sk-REPLACE_WITH_YOUR_KEY
+```
+
+Install into a non-web profile the same way — swap the profile name:
+
+```sh
+dsh plugin --profile dsh-tui add dsh-gateway-provider
+```
+
+After a restart the gateway models should appear in the TUI model picker.
+Connection Test / Sync / per-model editing still need the web settings page
+(or hand-edits of the YAML above). A future in-terminal settings surface
+(`tuiSettingsSections`, see [#5](https://github.com/Luck9Star/dsh-gateway-provider/issues/5))
+may cover the scalar fields; until then the YAML override is the supported
+path.
+
 ## Daily use
 
 Everything lives in **Settings → Gateway Models**:
