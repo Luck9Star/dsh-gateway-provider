@@ -28,4 +28,5 @@ jobs:
       - run: npm run test:urls
       - run: npm run test:schema
       - run: npm run test:errors
+      - run: npm run test:provider-cache
       - run: npm publish

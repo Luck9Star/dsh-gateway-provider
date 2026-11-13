@@ -160,6 +160,7 @@ the first start where the plugin loads. The frequently used ones:
 | Wrong format answers / tool calls flaky for one model | That model is routed over a protocol it handles poorly. Pin `protocol` on the model (`openai`, `openai-response`, `anthropic`, `gemini`). |
 | Custom gateway with separate endpoints | Use `flavor: "custom"` and set `openaiURL` / `responsesURL` / `anthropicURL` / `geminiURL` explicitly. |
 | Gemini model returns HTML / `Unexpected token '<'` (issue #4) | The gateway serves Gemini under `/v1beta`; fixed in 1.1.2 — a plain `baseURL` now sends Gemini to `{base}/v1beta/models/…` (a `baseURL` ending in `/v1beta` also works). No older-version workaround exists; update the plugin. |
+| Protocol change still sends OpenAI `/v1/chat/completions` (issue #10) | The in-memory pi-ai provider cache ignored per-model `protocol` edits until restart or TTL; fixed in 1.1.5. The next request after a protocol-only save uses the new client immediately. Workaround on 1.1.4: restart DSH. |
 
 ## How it works (one minute version)
 
@@ -179,6 +180,7 @@ cd dsh-gateway-provider
 pnpm install               # pi-ai (pinned) + @deepseek-ai/* profile symlinks, via the prepare hook
 pnpm run test:client       # settings-UI render, both locales
 pnpm run test:urls         # URL/derivation units
+pnpm run test:provider-cache  # protocol edit rebuilds the cached pi-ai provider
 pnpm run smoke             # live gateway round-trip (needs a real key)
 ```
 
