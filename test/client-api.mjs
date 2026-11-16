@@ -29,6 +29,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SOURCE = fs.readFileSync(path.join(HERE, "..", "lib", "client.js"), "utf8");
 
 const calls = { settings: [], credentials: [], llm: [] };
+/** When true, credentials.set reports failure (write-order regression). */
+let failCredentialSet = false;
 const SNAPSHOT = {
 	label: "Main", baseURL: "https://gw.example.com", apiKeyEnv: "MY_KEY",
 	models: [{ id: "m1" }],
@@ -36,6 +38,8 @@ const SNAPSHOT = {
 		{ id: "backup", baseURL: "https://b.example.com", apiKeyEnv: "BACKUP_KEY", models: [] },
 		// Inherits the default ref (no apiKeyEnv) — the issue #12 edit path.
 		{ id: "shared-url", baseURL: "https://gw.example.com", models: [] },
+		// Inherits the default ref; its key write is made to fail (write order).
+		{ id: "fail-edit", baseURL: "https://f.example.com", models: [] },
 	],
 };
 const api = {
@@ -45,7 +49,7 @@ const api = {
 	},
 	credentials: {
 		describe: async (...a) => { calls.credentials.push(a); return { ok: true, value: { MY_KEY: { configured: true } } }; },
-		set: async (...a) => { calls.credentials.push(a); return { ok: true }; },
+		set: async (...a) => { calls.credentials.push(a); return { ok: !failCredentialSet }; },
 	},
 	llm: {
 		discoverModels: async (...a) => { calls.llm.push(a); return { ok: true, value: [{ id: "x", name: "X" }] }; },
@@ -221,6 +225,24 @@ if (!card) {
 		const sharedEntry = gwWrites.at(-1)?.[1].find((op) => op.path[0] === "gateways").value.find((g) => g.id === "shared-url");
 		expect(sharedEntry?.apiKeyEnv === "NEWAPI_API_KEY_SHARED_URL", "the edited gateway must persist its new apiKeyEnv");
 		expect(!calls.credentials.some((a) => a.length === 2 && a[0] === "MY_KEY"), "no write may target the default gateway's ref MY_KEY");
+	}
+
+	// (f) the key is stored before any setting references it: a failed
+	// credential write must leave the stored gateways untouched.
+	const failCard = propsList.find((p) => p && p.gateway?.id === "fail-edit" && typeof p.onSaveConfig === "function");
+	const addCard = propsList.find((p) => p && typeof p.onAdd === "function" && p.existingIds !== undefined);
+	if (!failCard || !addCard) {
+		problems.push("fail-edit card / add form not reachable in the render tree");
+	} else {
+		failCredentialSet = true;
+		const settingsBefore = calls.settings.length;
+		const editResult = await failCard.onSaveConfig({ apiKey: "sk-fail-edit" });
+		const addResult = await addCard.onAdd({ id: "fail-add", baseURL: "https://fa.example.com", apiKey: "sk-fail-add" });
+		await new Promise((r) => setTimeout(r, 20));
+		failCredentialSet = false;
+		expect(editResult?.ok === false && addResult?.ok === false, "a failed key write must report the save as failed");
+		const laterGatewayWrites = calls.settings.slice(settingsBefore).filter((a) => a.length === 3 && a[1].some((op) => op.path[0] === "gateways"));
+		expect(laterGatewayWrites.length === 0, `no gateways write may follow a failed key write (got ${laterGatewayWrites.length})`);
 	}
 
 	// (e) derived names never collide with refs already in use.
