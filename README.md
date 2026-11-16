@@ -152,7 +152,23 @@ the first start where the plugin loads. The frequently used ones:
 | `maxTokens` / `defaultContextWindow` | `32768` / `128000` | Fallbacks when models.dev has no data. |
 | `streamIdleTimeoutMs` | `600000` | Idle timeout while streaming. |
 | `catalogTimeoutMs` | `15000` | Cap on one model-list / models.dev request; a stalled gateway fails with `TIMEOUT` instead of hanging the picker or a chat request. |
-| `headers` | — | Extra HTTP headers sent to the gateway. |
+| `headers` | — | Extra HTTP headers for the **default** gateway only. Each entry in `gateways` takes its own `headers`; root headers are not inherited (see below). |
+
+**Upgrading: `headers` and extra gateways.** Up to 1.1.5, root `headers` were
+also sent to every entry in `gateways`. They now stay on the default gateway,
+so a header meant for one host (often an auth token) no longer reaches
+another. If an extra gateway relied on the inherited headers, copy them onto
+that gateway:
+
+```yaml
+- id: llm-newapi
+  config:
+    headers: { X-Team: alpha }          # default gateway only
+    gateways:
+      - id: backup
+        baseURL: https://backup.example.com
+        headers: { X-Team: alpha }      # now explicit per gateway
+```
 
 ## Troubleshooting
 

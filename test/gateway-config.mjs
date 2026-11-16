@@ -29,3 +29,20 @@ const BASE = "https://gw.example.com";
   assert.match(warnings[0], /my-gw/);
   console.log("[PASS] colliding gateway ids keep one route and warn");
 }
+
+// ---- Root headers stay on the default gateway --------------------------
+{
+  const gateways = resolveGateways({
+    baseURL: BASE,
+    headers: { "X-Default-Token": "test-default" },
+    gateways: [
+      { id: "third", baseURL: "https://third.example.com" },
+      { id: "own", baseURL: "https://own.example.com", headers: { "X-Own": "test-own" } },
+    ],
+  }, env);
+  const byId = Object.fromEntries(gateways.map((g) => [g.provider, g.connection.headers]));
+  assert.deepEqual(byId.newapi, { "X-Default-Token": "test-default" }, "the default gateway keeps the root headers");
+  assert.equal(byId["gateway:third"], undefined, "root headers must not leak to another gateway");
+  assert.deepEqual(byId["gateway:own"], { "X-Own": "test-own" }, "a gateway sends its own headers");
+  console.log("[PASS] root headers stay on the default gateway; gateways carry their own");
+}

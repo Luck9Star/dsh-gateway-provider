@@ -140,6 +140,12 @@ const GatewaySchema = z.object({
   models: z.array(ModelOverrideSchema),
   /** Wire-format preference order for this gateway. */
   endpointPriority: z.array(coercedString()),
+  /**
+   * Extra HTTP headers for this gateway's provider requests (name → value).
+   * Root-level `headers` belong to the default gateway only and are never
+   * inherited here.
+   */
+  headers: z.dict(coercedString()),
 });
 
 export const Config = z.object({
@@ -184,7 +190,8 @@ export const Config = z.object({
   userId: coercedString().default("1"),
   /**
    * Extra HTTP headers sent with every provider request to the default
-   * gateway (name → value). Reserved attribution headers (user-agent) are
+   * gateway only (name → value); additional gateways set their own
+   * `gateways[].headers`. Reserved attribution headers (user-agent) are
    * filtered out at request time; per-request values are unaffected.
    */
   headers: z.dict(coercedString()),
@@ -238,7 +245,9 @@ function gatewayConnection(gw, defaults, provider, label) {
     endpointPriority: gw.endpointPriority ?? defaults.endpointPriority,
     userId: gw.userId ?? defaults.userId,
     modelOverrides: indexModelOverrides(gw.models ?? []),
-    headers: defaults.headers,
+    // Never inherited: a header meant for one gateway (often a credential)
+    // must not travel to another host.
+    headers: gw.headers,
     maxTokens: defaults.maxTokens,
     defaultContextWindow: defaults.defaultContextWindow,
     streamIdleTimeoutMs: defaults.streamIdleTimeoutMs,
@@ -292,7 +301,6 @@ export function resolveGateways(config, environment, warn = () => {}) {
     excludePatterns: config.excludePatterns ?? DEFAULT_EXCLUDE_PATTERNS,
     endpointPriority: config.endpointPriority ?? DEFAULT_ENDPOINT_PRIORITY,
     userId: config.userId ?? "1",
-    headers: config.headers,
     maxTokens: config.maxTokens ?? DEFAULT_MAX_TOKENS,
     defaultContextWindow: config.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW,
     streamIdleTimeoutMs: config.streamIdleTimeoutMs ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS,
@@ -308,6 +316,7 @@ export function resolveGateways(config, environment, warn = () => {}) {
       responsesURL: config.responsesURL,
       anthropicURL: config.anthropicURL,
       geminiURL: config.geminiURL,
+      headers: config.headers,
     }, defaults, PROVIDER, defaultLabel) },
   ];
   // Additional gateways from the array. Ids are sanitized into route
