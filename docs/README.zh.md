@@ -100,7 +100,7 @@ dsh plugin --profile dsh-tui add dsh-gateway-provider
 | `apiKeyEnv` | `NEWAPI_API_KEY` | key 存在哪个环境/凭据变量里。 |
 | `label` | `NewAPI` | 选择器里显示的路由名。 |
 | `flavor` | `newapi` | 仅作模板标签（`newapi` / `litellm` / `higress` / `openai-compatible` / `custom`）。 |
-| `gateways` | — | 额外网关数组：`{ id, baseURL, apiKeyEnv, label, … }`，每个成为一条 `gateway:<id>` 路由。 |
+| `gateways` | — | 额外网关数组：`{ id, baseURL, apiKeyEnv, label, … }`，每个成为一条 `gateway:<id>` 路由。id 会转小写、其他字符换成 `-`（`My GW` → `gateway:my-gw`）；规整后撞名的后一条会被跳过并打警告日志。 |
 | `models` | — | 按模型覆盖：`{ id, name, disabled, protocol, contextWindow, maxTokens, reasoningLevels }`。 |
 | `useModelsDev` / `modelsUrl` | `true` / models.dev | 参数增补来源（支持 `file:` URL 离线用）。 |
 | `excludePatterns` | 图像/语音/…… | 要从选择器排除的模型 id 正则列表（不区分大小写）。 |

@@ -262,8 +262,11 @@ function routeIdOf(id) {
   return String(id ?? "").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-/** Build the gateway list and provider-route map from the resolved config. */
-export function resolveGateways(config, environment) {
+/**
+ * Build the gateway list and provider-route map from the resolved config.
+ * @param warn - receives one message per gateway entry skipped as unusable.
+ */
+export function resolveGateways(config, environment, warn = () => {}) {
   const rootProto = deriveProtocolURLs(config);
   const explicitBase = config.baseURL
     ?? environment?.get(DEFAULT_BASE_URL_ENV)?.value
@@ -307,10 +310,19 @@ export function resolveGateways(config, environment) {
       geminiURL: config.geminiURL,
     }, defaults, PROVIDER, defaultLabel) },
   ];
-  // Additional gateways from the array.
+  // Additional gateways from the array. Ids are sanitized into route
+  // suffixes, so two distinct ids ("My GW", "my-gw") can land on one route;
+  // the later entry is skipped (a duplicate route would fail registration
+  // and take every gateway, the default one included, down with it).
+  const seen = new Set();
   for (const gw of config.gateways ?? []) {
     const id = routeIdOf(gw.id);
     if (id.length === 0) continue;
+    if (seen.has(id)) {
+      warn(`llm-newapi: skipping gateway "${gw.id}": its route ${GATEWAY_PREFIX}${id} is already used by another gateway`);
+      continue;
+    }
+    seen.add(id);
     const hasBase = typeof gw.baseURL === "string" && gw.baseURL.length > 0;
     if (!hasBase && deriveProtocolURLs(gw) === undefined) continue;
     const provider = `${GATEWAY_PREFIX}${id}`;
@@ -339,7 +351,7 @@ export function apply(ctx, config) {
     const raw = current();
     if (raw === lastRaw && resolved !== null) return resolved;
     try {
-      const next = resolveGateways(raw, launchEnvironmentOf(ctx));
+      const next = resolveGateways(raw, launchEnvironmentOf(ctx), (message) => ctx.logger.warn(message));
       lastRaw = raw;
       resolved = next;
       return next;

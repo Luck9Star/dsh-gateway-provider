@@ -40,6 +40,8 @@ const SNAPSHOT = {
 		{ id: "shared-url", baseURL: "https://gw.example.com", models: [] },
 		// Inherits the default ref; its key write is made to fail (write order).
 		{ id: "fail-edit", baseURL: "https://f.example.com", models: [] },
+		// Hand-edited YAML id: the host routes it as gateway:mixed-case.
+		{ id: "Mixed Case", baseURL: "https://m.example.com", models: [] },
 	],
 };
 const api = {
@@ -243,6 +245,24 @@ if (!card) {
 		expect(editResult?.ok === false && addResult?.ok === false, "a failed key write must report the save as failed");
 		const laterGatewayWrites = calls.settings.slice(settingsBefore).filter((a) => a.length === 3 && a[1].some((op) => op.path[0] === "gateways"));
 		expect(laterGatewayWrites.length === 0, `no gateways write may follow a failed key write (got ${laterGatewayWrites.length})`);
+	}
+
+	// (g) the client addresses a gateway by the same route the host registers
+	// (index.js routeIdOf), and its duplicate check uses that route too.
+	const mixedCard = propsList.find((p) => p && p.gateway?.id === "Mixed Case" && typeof p.onTest === "function");
+	if (!mixedCard) {
+		problems.push("Mixed Case gateway card not reachable in the render tree");
+	} else {
+		expect(mixedCard.route === "gateway:mixed-case", `card route must match the host route gateway:mixed-case, got ${mixedCard.route}`);
+		const before = calls.llm.length;
+		await mixedCard.onTest();
+		await new Promise((r) => setTimeout(r, 20));
+		const asked = calls.llm.slice(before).map((a) => a[1]?.provider);
+		expect(asked.length === 1 && asked[0] === "gateway:mixed-case", `test-connection must ask the host route gateway:mixed-case, got ${asked}`);
+		const addCard2 = propsList.find((p) => p && typeof p.onAdd === "function" && p.existingIds !== undefined);
+		expect(addCard2.existingIds.indexOf("mixed-case") !== -1, "existingIds must hold sanitized ids so a colliding add is refused");
+		const dup = await addCard2.onAdd({ id: "mixed-case", baseURL: "https://dup.example.com" });
+		expect(dup?.ok === false, "adding an id that collides after sanitizing must be refused");
 	}
 
 	// (e) derived names never collide with refs already in use.

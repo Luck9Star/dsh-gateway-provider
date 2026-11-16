@@ -141,7 +141,7 @@ the first start where the plugin loads. The frequently used ones:
 | `apiKeyEnv` | `NEWAPI_API_KEY` | Which env/credential variable holds the key. |
 | `label` | `NewAPI` | Route label shown in the picker. |
 | `flavor` | `newapi` | Template label only (`newapi` / `litellm` / `higress` / `openai-compatible` / `custom`). |
-| `gateways` | — | Array of extra gateways: `{ id, baseURL, apiKeyEnv, label, … }`, each becoming a `gateway:<id>` route. |
+| `gateways` | — | Array of extra gateways: `{ id, baseURL, apiKeyEnv, label, … }`, each becoming a `gateway:<id>` route. The id is lower-cased and other characters become `-` (`My GW` → `gateway:my-gw`); a later entry whose id lands on an already-used route is skipped with a warning. |
 | `models` | — | Per-model overrides: `{ id, name, disabled, protocol, contextWindow, maxTokens, reasoningLevels }`. |
 | `useModelsDev` / `modelsUrl` | `true` / models.dev | Parameter enrichment source (supports `file:` URLs for offline). |
 | `excludePatterns` | image/speech/… | Regex list of model ids to keep out of the picker (matched case-insensitively). |
