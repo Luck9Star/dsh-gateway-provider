@@ -12,10 +12,14 @@ import { apply } from "../index.js";
 const STORED_KEY = "sk-test-stored";
 /** Authorization headers seen per mock host ("saved" / "other"). */
 const seen = { saved: [], other: [] };
+/** How the "other" host answers: "ok", "401", or "stall". */
+let otherMode = "ok";
 
 function mock(name) {
   return http.createServer((request, response) => {
     seen[name].push(request.headers.authorization);
+    if (name === "other" && otherMode === "stall") return;
+    if (name === "other" && otherMode === "401") { response.writeHead(401).end("bad key"); return; }
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify({ data: [{ id: `${name}-model`, supported_endpoint_types: ["openai"] }] }));
   });
@@ -58,7 +62,24 @@ try {
   await discover({ provider: "newapi", baseURL: otherURL, apiKey: "sk-test-draft" });
   assert.equal(seen.other.at(-1), "Bearer sk-test-draft", "a draft's own key is used for its address");
   console.log("[PASS] discovery sends the saved key only to the saved address");
+
+  // ---- Failures are thrown with a code, not swallowed into [] -------------
+  otherMode = "401";
+  await assert.rejects(discover({ baseURL: otherURL, apiKey: "sk-test-wrong" }), (error) => error.code === "AUTH", "a 401 must surface as AUTH");
+  await assert.rejects(discover({ provider: "gateway:missing" }), (error) => error.code === "INVALID_DISCOVERY", "an unknown route must be reported");
+  console.log("[PASS] discovery failures surface as LlmError codes");
+
+  // ---- The host's signal (second argument) cancels discovery ---------------
+  otherMode = "stall";
+  const controller = new AbortController();
+  const pending = discover({ baseURL: otherURL, apiKey: "sk-test-draft" }, controller.signal);
+  setTimeout(() => controller.abort(), 50);
+  const outcome = await Promise.race([
+    pending.then(() => "resolved", (error) => error.code),
+    new Promise((resolve) => setTimeout(() => resolve("still pending"), 2000)),
+  ]);
+  assert.equal(outcome, "ABORTED", `an aborted discovery must settle as ABORTED, got ${outcome}`);
+  console.log("[PASS] discovery honors the host's cancellation signal");
 } finally {
-  saved.close();
-  other.close();
+  for (const server of [saved, other]) { server.closeAllConnections(); server.close(); }
 }

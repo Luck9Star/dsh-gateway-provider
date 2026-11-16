@@ -441,11 +441,13 @@ export function apply(ctx, config) {
   ensureRegistration();
 
   /** Expose model discovery so the web UI can fetch a gateway's model list. */
-  ctx.llm.registerModelDiscovery(settingsNs, async (request) => {
-    const env = launchEnvironmentOf(ctx);
+  // dsh calls discover(request, signal): the cancellation is the second
+  // argument. Failures are thrown (not an empty list) so the settings page
+  // can show why Test / Sync found nothing.
+  ctx.llm.registerModelDiscovery(settingsNs, async (request, signal) => {
     const gateways = resolve();
     const gw = request.provider !== undefined ? gateways.find((g) => g.provider === request.provider) : gateways[0];
-    if (gw === undefined) return [];
+    if (gw === undefined) throw new LlmError(`llm-newapi: no gateway route "${request.provider}" to discover models for`, "INVALID_DISCOVERY");
     // An explicit baseURL override (the settings UI's test/fetch path) wins
     // for discovery; empty strings count as absent.
     const reqBase = typeof request.baseURL === "string" && request.baseURL.length > 0
@@ -462,9 +464,10 @@ export function apply(ctx, config) {
     const apiKey = request.apiKey ?? (sameEndpoint ? await resolveApiKey(gw.connection).catch(() => undefined) : undefined);
     const { discoverGatewayModels } = await import("./lib/catalog.js");
     try {
-      return await discoverGatewayModels(connection, apiKey, request.signal);
-    } catch {
-      return [];
+      return await discoverGatewayModels(connection, apiKey, signal);
+    } catch (error) {
+      if (error instanceof LlmError) throw error;
+      throw new LlmError(`llm-newapi: model discovery for ${gw.provider} failed`, "DISCOVERY_FAILED", { cause: error });
     }
   });
 
