@@ -33,7 +33,8 @@
     "test:urls": "node test/protocol-urls.mjs",
     "test:schema": "node test/schema-coercion.mjs",
     "test:errors": "node test/error-codes.mjs",
-    "test:provider-cache": "node test/provider-cache.mjs"
+    "test:provider-cache": "node test/provider-cache.mjs",
+    "test:catalog-cache": "node test/catalog-cache.mjs"
   },
   "keywords": [
     "deepseek-harness",

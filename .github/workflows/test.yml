@@ -1,0 +1,29 @@
+# Offline test suite on every push and pull request (the publish workflow
+# runs the same suite, but only on release tags).
+name: test
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: npm install # installs peerDependencies (no lockfile, zero deps)
+      - run: npm run test:session
+      - run: npm run test:client
+      - run: npm run test:client-api
+      - run: npm run test:urls
+      - run: npm run test:schema
+      - run: npm run test:errors
+      - run: npm run test:provider-cache
+      - run: npm run test:catalog-cache

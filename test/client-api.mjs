@@ -29,10 +29,18 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SOURCE = fs.readFileSync(path.join(HERE, "..", "lib", "client.js"), "utf8");
 
 const calls = { settings: [], credentials: [], llm: [] };
+/** When true, credentials.set reports failure (write-order regression). */
+let failCredentialSet = false;
 const SNAPSHOT = {
 	label: "Main", baseURL: "https://gw.example.com", apiKeyEnv: "MY_KEY",
 	models: [{ id: "m1" }],
-	gateways: [{ id: "backup", baseURL: "https://b.example.com", apiKeyEnv: "BACKUP_KEY", models: [] }],
+	gateways: [
+		{ id: "backup", baseURL: "https://b.example.com", apiKeyEnv: "BACKUP_KEY", models: [] },
+		// Inherits the default ref (no apiKeyEnv) — the issue #12 edit path.
+		{ id: "shared-url", baseURL: "https://gw.example.com", models: [] },
+		// Inherits the default ref; its key write is made to fail (write order).
+		{ id: "fail-edit", baseURL: "https://f.example.com", models: [] },
+	],
 };
 const api = {
 	settings: {
@@ -41,7 +49,7 @@ const api = {
 	},
 	credentials: {
 		describe: async (...a) => { calls.credentials.push(a); return { ok: true, value: { MY_KEY: { configured: true } } }; },
-		set: async (...a) => { calls.credentials.push(a); return { ok: true }; },
+		set: async (...a) => { calls.credentials.push(a); return { ok: !failCredentialSet }; },
 	},
 	llm: {
 		discoverModels: async (...a) => { calls.llm.push(a); return { ok: true, value: [{ id: "x", name: "X" }] }; },
@@ -173,7 +181,75 @@ if (!card) {
 		for (const a of sets) {
 			expect(typeof a[0] === "string" && typeof a[1] === "string", "credentials.set arguments must be (ref, value) strings");
 		}
+
+		// ---- Issue #12: a new key never overwrites the default gateway's ref ----
+		const lastGatewaysWrite = () => {
+			const m = calls.settings.filter((a) => a.length === 3 && a[1].some((op) => op.path[0] === "gateways")).at(-1);
+			return m && m[1].find((op) => op.path[0] === "gateways").value;
+		};
+		const setsFor = (value) => calls.credentials.filter((a) => a.length === 2 && a[1] === value);
+
+		// (a) add with a key and no env var → per-gateway ref, persisted on the entry.
+		const edgeSet = setsFor("sk-edge");
+		expect(edgeSet.length === 1, "add-gateway with a key must write it exactly once");
+		expect(edgeSet[0]?.[0] !== "MY_KEY", `add-gateway key must not overwrite the default ref MY_KEY (wrote ${edgeSet[0]?.[0]})`);
+		expect(edgeSet[0]?.[0] === "NEWAPI_API_KEY_EDGE", `add-gateway key ref should be NEWAPI_API_KEY_EDGE, got ${edgeSet[0]?.[0]}`);
+		const edgeEntry = (lastGatewaysWrite() || []).find((g) => g.id === "edge");
+		expect(edgeEntry?.apiKeyEnv === edgeSet[0]?.[0], "the added gateway entry must reference the ref its key was written to");
+
+		// (b) add with an explicit env var → exactly that ref.
+		await addForm.onAdd({ id: "explicit", baseURL: "https://x.example.com", apiKeyEnv: "X_KEY", apiKey: "sk-x" });
+		await new Promise((r) => setTimeout(r, 20));
+		expect(setsFor("sk-x")[0]?.[0] === "X_KEY", "an explicit apiKeyEnv must be used as-is");
+
+		// (c) add with no key and no env var → inherits the default (no write, no ref).
+		const before = calls.credentials.length;
+		await addForm.onAdd({ id: "inherit", baseURL: "https://i.example.com" });
+		await new Promise((r) => setTimeout(r, 20));
+		expect(calls.credentials.slice(before).every((a) => a.length !== 2), "add-gateway without a key must not write any credential");
+		const inheritEntry = (lastGatewaysWrite() || []).find((g) => g.id === "inherit");
+		expect(inheritEntry !== undefined && inheritEntry.apiKeyEnv === undefined, "a key-less gateway keeps inheriting the default ref");
 	}
+
+	// (d) editing an inheriting gateway with only a new key → its own ref.
+	const sharedCard = propsList.find((p) => p && p.gateway?.id === "shared-url" && typeof p.onSaveConfig === "function");
+	if (!sharedCard) {
+		problems.push("shared-url gateway card not reachable in the render tree");
+	} else {
+		const result = await sharedCard.onSaveConfig({ apiKey: "sk-shared" });
+		await new Promise((r) => setTimeout(r, 20));
+		expect(result?.ok === true, "key-only save on an inheriting gateway must succeed");
+		const sharedSet = calls.credentials.filter((a) => a.length === 2 && a[1] === "sk-shared");
+		expect(sharedSet.length === 1 && sharedSet[0][0] === "NEWAPI_API_KEY_SHARED_URL", `inheriting-gateway key must go to NEWAPI_API_KEY_SHARED_URL, got ${sharedSet[0]?.[0]}`);
+		const gwWrites = calls.settings.filter((a) => a.length === 3 && a[1].some((op) => op.path[0] === "gateways"));
+		const sharedEntry = gwWrites.at(-1)?.[1].find((op) => op.path[0] === "gateways").value.find((g) => g.id === "shared-url");
+		expect(sharedEntry?.apiKeyEnv === "NEWAPI_API_KEY_SHARED_URL", "the edited gateway must persist its new apiKeyEnv");
+		expect(!calls.credentials.some((a) => a.length === 2 && a[0] === "MY_KEY"), "no write may target the default gateway's ref MY_KEY");
+	}
+
+	// (f) the key is stored before any setting references it: a failed
+	// credential write must leave the stored gateways untouched.
+	const failCard = propsList.find((p) => p && p.gateway?.id === "fail-edit" && typeof p.onSaveConfig === "function");
+	const addCard = propsList.find((p) => p && typeof p.onAdd === "function" && p.existingIds !== undefined);
+	if (!failCard || !addCard) {
+		problems.push("fail-edit card / add form not reachable in the render tree");
+	} else {
+		failCredentialSet = true;
+		const settingsBefore = calls.settings.length;
+		const editResult = await failCard.onSaveConfig({ apiKey: "sk-fail-edit" });
+		const addResult = await addCard.onAdd({ id: "fail-add", baseURL: "https://fa.example.com", apiKey: "sk-fail-add" });
+		await new Promise((r) => setTimeout(r, 20));
+		failCredentialSet = false;
+		expect(editResult?.ok === false && addResult?.ok === false, "a failed key write must report the save as failed");
+		const laterGatewayWrites = calls.settings.slice(settingsBefore).filter((a) => a.length === 3 && a[1].some((op) => op.path[0] === "gateways"));
+		expect(laterGatewayWrites.length === 0, `no gateways write may follow a failed key write (got ${laterGatewayWrites.length})`);
+	}
+
+	// (e) derived names never collide with refs already in use.
+	const derive = moduleExports.perGatewayKeyEnv;
+	expect(derive("a-b", []) === "NEWAPI_API_KEY_A_B", "derived ref upper-cases and replaces '-'");
+	expect(derive("a-b", ["NEWAPI_API_KEY_A_B"]) === "NEWAPI_API_KEY_A_B_2", "derived ref is suffixed on collision");
+	expect(/^[A-Za-z_][A-Za-z0-9_]*$/.test(derive("9lives", [])), "derived ref is a valid credential ref");
 }
 
 // settings.mutate: (ns, ops, expectedRevision) — arity 3, ns first, ops array.

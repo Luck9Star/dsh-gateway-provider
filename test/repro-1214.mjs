@@ -1,7 +1,9 @@
 // 模拟插件完整流程:findPiModel → buildModel → pi-ai convertMessages
 // 验证 glm-5.3-flash 是否因 pi-ai 目录未命中而丢失 zai compat
-const base = '/Users/yangyitian/Documents/dev/Agents/dsh/dsh-newapi-provider';
-const piDist = '/Users/yangyitian/.dsh/profiles/node_modules/@earendil-works/pi-ai/dist';
+// 路径相对本仓库解析（原先写死在作者机器上的绝对路径，其他机器跑不了）。
+// pi-ai 用插件自带的那份（node_modules/@earendil-works/pi-ai）。
+const base = new URL('..', import.meta.url).href.replace(/\/$/, '');
+const piDist = new URL('../node_modules/@earendil-works/pi-ai/dist', import.meta.url).href;
 
 const { findPiModel } = await import(base + '/lib/thinking.js');
 const { buildModel } = await import(base + '/lib/pi-provider.js');

@@ -114,8 +114,11 @@ Everything lives in **Settings → Gateway Models**:
 
 - **Add more gateways** — "Add Gateway", pick a template (LiteLLM, Higress,
   OpenAI-compatible, or fully custom with per-protocol URLs), point it at
-  the base URL, name its key env var, Test, Sync. Each gateway becomes its
-  own route in the picker.
+  the base URL, enter its key (and optionally its key env var name), Test,
+  Sync. A key entered without an env var name is stored under the gateway's
+  own `NEWAPI_API_KEY_<ID>`, never over the default gateway's key; leave
+  both blank to reuse the default key. Each gateway becomes its own route in
+  the picker, with its own model list.
 - **Tame the model list** — non-chat models (image / speech / embedding /
   rerank …) are excluded by default regexes; hide or rename any model; add
   a custom model by hand if the gateway hides it; per-model protocol,
