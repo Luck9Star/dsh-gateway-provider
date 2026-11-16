@@ -38,7 +38,8 @@
     "test:timeouts": "node test/timeouts.mjs",
     "test:gateway-config": "node test/gateway-config.mjs",
     "test:discovery": "node test/discovery.mjs",
-    "test:reasoning": "node test/reasoning.mjs"
+    "test:reasoning": "node test/reasoning.mjs",
+    "test:settings-path": "node test/settings-path.mjs"
   },
   "keywords": [
     "deepseek-harness",

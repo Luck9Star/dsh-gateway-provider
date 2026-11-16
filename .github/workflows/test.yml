@@ -31,3 +31,4 @@ jobs:
       - run: npm run test:gateway-config
       - run: npm run test:discovery
       - run: npm run test:reasoning
+      - run: npm run test:settings-path

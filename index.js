@@ -329,7 +329,7 @@ export function resolveGateways(config, environment, warn = () => {}) {
   // the later entry is skipped (a duplicate route would fail registration
   // and take every gateway, the default one included, down with it).
   const seen = new Set();
-  for (const gw of config.gateways ?? []) {
+  for (const [index, gw] of (config.gateways ?? []).entries()) {
     const id = routeIdOf(gw.id);
     if (id.length === 0) continue;
     if (seen.has(id)) {
@@ -350,7 +350,9 @@ export function resolveGateways(config, environment, warn = () => {}) {
       continue;
     }
     seen.add(id);
-    gateways.push({ provider, id, label, connection });
+    // `index` is the entry's slot in the settings array (skipped entries
+    // keep their slots), which the host's settingsPath addresses.
+    gateways.push({ provider, id, index, label, connection });
   }
   return gateways;
 }
@@ -426,13 +428,17 @@ export function apply(ctx, config) {
     const gateways = resolve();
     // Include the per-protocol bases: URL-addressed (custom) gateways may
     // share an empty plain baseURL, and URL-only edits must re-register.
-    const facts = gateways.map((g) => `${g.provider}:${g.connection.baseURL}:${g.label}:${g.connection.apiBases ? JSON.stringify(g.connection.apiBases) : ""}`);
+    // The index is a fact too: deleting a gateway shifts the later ones'
+    // settingsPath even when nothing else about them changed.
+    const facts = gateways.map((g) => `${g.provider}:${g.index ?? ""}:${g.connection.baseURL}:${g.label}:${g.connection.apiBases ? JSON.stringify(g.connection.apiBases) : ""}`);
     if (directoryFacts !== undefined && JSON.stringify(facts) === JSON.stringify(directoryFacts)) return;
     const entries = gateways.map((g, i) => ({
       provider: g.provider,
       displayName: g.label,
       settingsNs,
-      settingsPath: i === 0 ? [] : ["gateways", String(g.id)],
+      // dsh walks this path with Reflect.get; `gateways` is an array, so
+      // the step is the entry's index, not its id.
+      settingsPath: i === 0 ? [] : ["gateways", String(g.index)],
       declared: i > 0,
     }));
     const routes = gateways.map((g) => g.provider);
