@@ -33,4 +33,5 @@ jobs:
       - run: npm run test:catalog-cache
       - run: npm run test:timeouts
       - run: npm run test:gateway-config
+      - run: npm run test:discovery
       - run: npm publish

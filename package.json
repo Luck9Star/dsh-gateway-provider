@@ -36,7 +36,8 @@
     "test:provider-cache": "node test/provider-cache.mjs",
     "test:catalog-cache": "node test/catalog-cache.mjs",
     "test:timeouts": "node test/timeouts.mjs",
-    "test:gateway-config": "node test/gateway-config.mjs"
+    "test:gateway-config": "node test/gateway-config.mjs",
+    "test:discovery": "node test/discovery.mjs"
   },
   "keywords": [
     "deepseek-harness",

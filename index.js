@@ -266,6 +266,11 @@ function indexModelOverrides(models) {
   return map;
 }
 
+/** Compare-key for a gateway address: no trailing slash or version segment, case-insensitive. */
+function endpointOf(url) {
+  return String(url ?? "").trim().replace(/\/+$/, "").replace(/\/v\d+(?:beta)?$/i, "").toLowerCase();
+}
+
 /** Sanitize a gateway id into a stable provider-route suffix. */
 function routeIdOf(id) {
   return String(id ?? "").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -449,7 +454,12 @@ export function apply(ctx, config) {
     const connection = reqBase !== undefined
       ? { ...gw.connection, baseURL: reqBase, catalogBase: reqBase }
       : gw.connection;
-    const apiKey = request.apiKey ?? await resolveApiKey(gw.connection).catch(() => undefined);
+    // The stored key belongs to the stored address. A draft that points
+    // discovery somewhere else must bring its own key; never send the saved
+    // one to an address the user has not saved for this gateway.
+    const storedBase = gw.connection.catalogBase ?? gw.connection.baseURL;
+    const sameEndpoint = reqBase === undefined || endpointOf(reqBase) === endpointOf(storedBase);
+    const apiKey = request.apiKey ?? (sameEndpoint ? await resolveApiKey(gw.connection).catch(() => undefined) : undefined);
     const { discoverGatewayModels } = await import("./lib/catalog.js");
     try {
       return await discoverGatewayModels(connection, apiKey, request.signal);
