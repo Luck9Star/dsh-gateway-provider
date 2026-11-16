@@ -31,6 +31,7 @@
     "test:client": "node test/client-render.mjs",
     "test:client-api": "node test/client-api.mjs",
     "test:urls": "node test/protocol-urls.mjs",
+    "test:pi-catalog": "node test/pi-catalog.mjs",
     "test:schema": "node test/schema-coercion.mjs",
     "test:errors": "node test/error-codes.mjs",
     "test:provider-cache": "node test/provider-cache.mjs",
@@ -73,7 +74,7 @@
     }
   },
   "dependencies": {
-    "@earendil-works/pi-ai": "0.84.4"
+    "@earendil-works/pi-ai": "1.5.2"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",

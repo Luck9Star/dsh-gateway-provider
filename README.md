@@ -207,7 +207,10 @@ pnpm run smoke             # live gateway round-trip (needs a real key)
 ### Why the plugin pins its own pi-ai
 
 `@earendil-works/pi-ai` is a direct dependency (exact-pinned), independent of
-the pi-ai version bundled with the harness. This decouples the gateway model
+the pi-ai copy bundled with the harness. The pin follows the major version
+the harness itself uses (dsh 0.2.2 depends on pi-ai `^1.3.0`; the plugin pins
+1.5.2) and is bumped deliberately, so the catalog knows the same models the
+harness ships with (e.g. its default `deepseek-flash`). This decouples the gateway model
 catalog (thinking levels, per-provider compat such as zhipu GLM's
 `supportsDeveloperRole: false`) from harness upgrades: a model missing from
 the harness's older catalog no longer degrades request encoding. The
