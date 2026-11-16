@@ -86,7 +86,7 @@ dsh plugin --profile dsh-tui add dsh-gateway-provider
 
 一切都在 **Settings → Gateway Models**：
 
-- **加更多网关** —— "Add Gateway"，选模板（LiteLLM、Higress、OpenAI 兼容，或按协议分别填 URL 的完全自定义），填 base URL 和 key 的环境变量名，Test、Sync。每个网关在选择器里有自己的路由。
+- **加更多网关** —— "Add Gateway"，选模板（LiteLLM、Higress、OpenAI 兼容，或按协议分别填 URL 的完全自定义），填 base URL 和 key（环境变量名可选），Test、Sync。只填 key 不填变量名时，key 存到本网关专属的 `NEWAPI_API_KEY_<ID>`，不会覆盖默认网关的 key；两者都留空则沿用默认 key。每个网关在选择器里有自己的路由和自己的模型列表。
 - **管好模型列表** —— 非对话模型（图像 / 语音 / 向量 / 重排……）默认被正则排除；任意模型可隐藏、可改名；网关藏起来的模型可手工添加；每个模型的协议、上下文窗口、输出上限、推理档位都可改。
 - **密钥放在 dsh 凭据存储里** —— 设置页有状态徽标（`✓ Key set · NEWAPI_API_KEY` / `⚠ No key set`），也可以直接帮你把 key 写进去。
 
