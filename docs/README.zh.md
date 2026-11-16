@@ -137,6 +137,8 @@ token）被带到别的主机。如果某个额外网关依赖继承来的头，
 | 单个模型工具调用不稳、格式怪 | 该模型被路由到了它处理不好的协议。在模型上钉死 `protocol`（`openai`、`openai-response`、`anthropic`、`gemini`）。 |
 | 自定义网关各协议端点分开 | 用 `flavor: "custom"`，显式填 `openaiURL` / `responsesURL` / `anthropicURL` / `geminiURL`。 |
 | Gemini 模型返回 HTML / `Unexpected token '<'`（issue #4） | 网关把 Gemini 挂在 `/v1beta` 下；1.1.2 已修复 —— 普通 `baseURL` 也会把 Gemini 请求发到 `{base}/v1beta/models/…`（`baseURL` 以 `/v1beta` 结尾同样可用）。旧版本没有任何绕过手段，请升级插件。 |
+| 给额外网关存 Key 时把默认 Key 覆盖了；网关之间串了模型列表（issue #12） | 1.2.0 已修复：没填 `apiKeyEnv` 的网关，新 Key 存到它自己的 `NEWAPI_API_KEY_<ID>`；模型列表按网关和 Key 分开缓存。如果在 1.1.5 下默认 Key 已被覆盖，请把默认网关的 Key 重新填一次。 |
+| 加了多个网关后推理档位选项消失（issue #13） | 1.2.0 已修复：模型目录缓存按网关路由分开，一个网关的列表不会再顶掉另一个的。 |
 
 ## 工作原理（一分钟版）
 

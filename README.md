@@ -181,6 +181,8 @@ that gateway:
 | Custom gateway with separate endpoints | Use `flavor: "custom"` and set `openaiURL` / `responsesURL` / `anthropicURL` / `geminiURL` explicitly. |
 | Gemini model returns HTML / `Unexpected token '<'` (issue #4) | The gateway serves Gemini under `/v1beta`; fixed in 1.1.2 — a plain `baseURL` now sends Gemini to `{base}/v1beta/models/…` (a `baseURL` ending in `/v1beta` also works). No older-version workaround exists; update the plugin. |
 | Protocol change still sends OpenAI `/v1/chat/completions` (issue #10) | The in-memory pi-ai provider cache ignored per-model `protocol` edits until restart or TTL; fixed in 1.1.5. The next request after a protocol-only save uses the new client immediately. Workaround on 1.1.4: restart DSH. |
+| Saving an extra gateway's key replaced the default key; gateways showed each other's models (issue #12) | Fixed in 1.2.0: a key entered for a gateway without its own `apiKeyEnv` is stored under `NEWAPI_API_KEY_<ID>`, and model lists are cached per gateway and key. If a 1.1.5 save overwrote your default key, enter the default gateway's key again once. |
+| Reasoning effort options vanished after adding gateways (issue #13) | Fixed in 1.2.0: the catalog cache is per gateway route, so one gateway's list no longer replaces another's. |
 
 ## How it works (one minute version)
 
