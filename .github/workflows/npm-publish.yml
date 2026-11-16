@@ -27,6 +27,7 @@ jobs:
       - run: npm run test:client
       - run: npm run test:client-api
       - run: npm run test:urls
+      - run: npm run test:pi-catalog
       - run: npm run test:schema
       - run: npm run test:errors
       - run: npm run test:provider-cache
@@ -35,5 +36,4 @@ jobs:
       - run: npm run test:gateway-config
       - run: npm run test:discovery
       - run: npm run test:reasoning
-      - run: npm run test:pi-catalog
       - run: npm publish

@@ -31,6 +31,7 @@
     "test:client": "node test/client-render.mjs",
     "test:client-api": "node test/client-api.mjs",
     "test:urls": "node test/protocol-urls.mjs",
+    "test:pi-catalog": "node test/pi-catalog.mjs",
     "test:schema": "node test/schema-coercion.mjs",
     "test:errors": "node test/error-codes.mjs",
     "test:provider-cache": "node test/provider-cache.mjs",
@@ -38,8 +39,7 @@
     "test:timeouts": "node test/timeouts.mjs",
     "test:gateway-config": "node test/gateway-config.mjs",
     "test:discovery": "node test/discovery.mjs",
-    "test:reasoning": "node test/reasoning.mjs",
-    "test:pi-catalog": "node test/pi-catalog.mjs"
+    "test:reasoning": "node test/reasoning.mjs"
   },
   "keywords": [
     "deepseek-harness",
