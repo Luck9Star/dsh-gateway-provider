@@ -44,10 +44,20 @@ const SNAPSHOT = {
 		{ id: "Mixed Case", baseURL: "https://m.example.com", models: [] },
 	],
 };
+/** The namespace revision the stub host stands at (dsh-settings semantics). */
+let revision = 7;
 const api = {
 	settings: {
-		describe: async (...a) => { calls.settings.push(a); return { ok: true, value: { namespaces: [{ ns: "llm-newapi", value: SNAPSHOT }] } }; },
-		mutate: async (...a) => { calls.settings.push(a); return { ok: true, value: { ns: "llm-newapi" } }; },
+		describe: async (...a) => { calls.settings.push(a); return { ok: true, value: { namespaces: [{ ns: "llm-newapi", value: SNAPSHOT, revision }] } }; },
+		mutate: async (...a) => {
+			calls.settings.push(a);
+			// Like dsh-settings: a write that expected another revision is refused.
+			if (a[2] !== undefined && a[2] !== revision) {
+				return { ok: false, error: { code: "settings/conflict", message: `expected revision ${a[2]}, now ${revision}` } };
+			}
+			revision += 1;
+			return { ok: true, value: { ns: "llm-newapi", value: SNAPSHOT, revision } };
+		},
 	},
 	credentials: {
 		describe: async (...a) => { calls.credentials.push(a); return { ok: true, value: { MY_KEY: { configured: true } } }; },
@@ -280,6 +290,23 @@ if (!card) {
 			`an invalid apiKeyEnv must write nothing (settings +${calls.settings.length - settingsBefore}, credentials +${calls.credentials.length - credsBefore})`);
 	}
 
+	// (i) a write made against a stale view is refused, the page reloads and
+	// says so, and the next write (from the fresh view) goes through.
+	{
+		const card = propsList.find((p) => p && p.gateway?.id === "backup" && typeof p.onSaveConfig === "function");
+		await new Promise((r) => setTimeout(r, 20));
+		revision += 1; // another window / process saved meanwhile
+		const describesBefore = calls.settings.filter((a) => a.length === 0).length;
+		const stale = await card.onSaveConfig({ label: "stale edit" });
+		await new Promise((r) => setTimeout(r, 20));
+		expect(stale?.ok === false, "a write against a stale revision must be reported as failed, not overwrite the newer settings");
+		expect(calls.settings.filter((a) => a.length === 0).length > describesBefore, "a refused write must reload the settings");
+		const notice = JSON.stringify(renderSection());
+		expect(/changed elsewhere|别处/.test(notice), "the page must tell the user the settings changed elsewhere");
+		const fresh = await card.onSaveConfig({ label: "fresh edit" });
+		expect(fresh?.ok === true, "after the reload the next write must go through");
+	}
+
 	// (e) derived names never collide with refs already in use.
 	const derive = moduleExports.perGatewayKeyEnv;
 	expect(derive("a-b", []) === "NEWAPI_API_KEY_A_B", "derived ref upper-cases and replaces '-'");
@@ -291,6 +318,7 @@ if (!card) {
 const mutates = calls.settings.filter((a) => a.length !== 0);
 for (const a of mutates) {
 	expect(a.length === 3, `settings.mutate must carry 3 arguments (ns, ops, expectedRevision), got ${a.length}`);
+	expect(typeof a[2] === "number", `settings.mutate must send the revision it read as expectedRevision, got ${a[2]}`);
 	expect(a[0] === "llm-newapi", "settings.mutate first argument must be the namespace string");
 	expect(Array.isArray(a[1]), "settings.mutate second argument must be an ops array");
 }
