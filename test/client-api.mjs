@@ -265,6 +265,21 @@ if (!card) {
 		expect(dup?.ok === false, "adding an id that collides after sanitizing must be refused");
 	}
 
+	// (h) an invalid key variable name is refused before anything is written
+	// (the host would reject the ref and skip the gateway).
+	{
+		const card = propsList.find((p) => p && p.gateway?.id === "shared-url" && typeof p.onSaveConfig === "function");
+		const add = propsList.find((p) => p && typeof p.onAdd === "function" && p.existingIds !== undefined);
+		const settingsBefore = calls.settings.length;
+		const credsBefore = calls.credentials.length;
+		const edit = await card.onSaveConfig({ apiKeyEnv: "MY-KEY", apiKey: "sk-test-bad-env" });
+		const added = await add.onAdd({ id: "bad-env", baseURL: "https://be.example.com", apiKeyEnv: "9KEY", apiKey: "sk-test-bad-env" });
+		await new Promise((r) => setTimeout(r, 20));
+		expect(edit?.ok === false && added?.ok === false, "an invalid apiKeyEnv must be refused");
+		expect(calls.settings.length === settingsBefore && calls.credentials.length === credsBefore,
+			`an invalid apiKeyEnv must write nothing (settings +${calls.settings.length - settingsBefore}, credentials +${calls.credentials.length - credsBefore})`);
+	}
+
 	// (e) derived names never collide with refs already in use.
 	const derive = moduleExports.perGatewayKeyEnv;
 	expect(derive("a-b", []) === "NEWAPI_API_KEY_A_B", "derived ref upper-cases and replaces '-'");

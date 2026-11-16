@@ -46,3 +46,19 @@ const BASE = "https://gw.example.com";
   assert.deepEqual(byId["gateway:own"], { "X-Own": "test-own" }, "a gateway sends its own headers");
   console.log("[PASS] root headers stay on the default gateway; gateways carry their own");
 }
+
+// ---- A broken gateway is skipped, the others still load ------------------
+{
+  const warnings = [];
+  const gateways = resolveGateways({
+    baseURL: BASE,
+    gateways: [
+      { id: "bad", baseURL: "https://bad.example.com", apiKeyEnv: "MY-KEY" },
+      { id: "good", baseURL: "https://good.example.com" },
+    ],
+  }, env, (message) => warnings.push(message));
+  assert.deepEqual(gateways.map((g) => g.provider), ["newapi", "gateway:good"], "an invalid apiKeyEnv must skip only that gateway");
+  assert.equal(warnings.length, 1, "the skipped gateway is reported");
+  assert.match(warnings[0], /"bad"/);
+  console.log("[PASS] a gateway with an invalid apiKeyEnv is skipped with a warning");
+}

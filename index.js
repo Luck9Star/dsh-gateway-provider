@@ -336,17 +336,21 @@ export function resolveGateways(config, environment, warn = () => {}) {
       warn(`llm-newapi: skipping gateway "${gw.id}": its route ${GATEWAY_PREFIX}${id} is already used by another gateway`);
       continue;
     }
-    seen.add(id);
     const hasBase = typeof gw.baseURL === "string" && gw.baseURL.length > 0;
     if (!hasBase && deriveProtocolURLs(gw) === undefined) continue;
     const provider = `${GATEWAY_PREFIX}${id}`;
     const label = gw.label ?? provider;
-    gateways.push({
-      provider,
-      id,
-      label,
-      connection: gatewayConnection(gw, defaults, provider, label),
-    });
+    // One misconfigured gateway (say, an invalid apiKeyEnv name) is skipped
+    // with a warning instead of failing the plugin for every gateway.
+    let connection;
+    try {
+      connection = gatewayConnection(gw, defaults, provider, label);
+    } catch (error) {
+      warn(`llm-newapi: skipping gateway "${gw.id}": ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+    seen.add(id);
+    gateways.push({ provider, id, label, connection });
   }
   return gateways;
 }

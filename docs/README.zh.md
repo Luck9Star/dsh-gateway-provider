@@ -97,7 +97,7 @@ dsh plugin --profile dsh-tui add dsh-gateway-provider
 | 键 | 默认值 | 含义 |
 | --- | --- | --- |
 | `baseURL` | `https://api.newapi.ai` | 网关 base URL。环境变量兜底：`NEWAPI_BASE_URL`、`NEWAPI_API_URL`。结尾带 `/v1` 或 `/v1beta` 均可（发现时会剥掉）；Gemini 请求固定发往 `{base}/v1beta/models/…`。 |
-| `apiKeyEnv` | `NEWAPI_API_KEY` | key 存在哪个环境/凭据变量里。 |
+| `apiKeyEnv` | `NEWAPI_API_KEY` | key 存在哪个环境/凭据变量里。只能用字母、数字和 `_`，且不能以数字开头；额外网关的名字不合法时，只跳过这一个网关并打警告日志，其他网关照常加载。 |
 | `label` | `NewAPI` | 选择器里显示的路由名。 |
 | `flavor` | `newapi` | 仅作模板标签（`newapi` / `litellm` / `higress` / `openai-compatible` / `custom`）。 |
 | `gateways` | — | 额外网关数组：`{ id, baseURL, apiKeyEnv, label, … }`，每个成为一条 `gateway:<id>` 路由。id 会转小写、其他字符换成 `-`（`My GW` → `gateway:my-gw`）；规整后撞名的后一条会被跳过并打警告日志。 |

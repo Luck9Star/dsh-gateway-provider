@@ -138,7 +138,7 @@ the first start where the plugin loads. The frequently used ones:
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `baseURL` | `https://api.newapi.ai` | Your gateway's base URL. Env fallbacks: `NEWAPI_BASE_URL`, `NEWAPI_API_URL`. A trailing `/v1` or `/v1beta` is tolerated (stripped for discovery); Gemini requests always go to `{base}/v1beta/models/…`. |
-| `apiKeyEnv` | `NEWAPI_API_KEY` | Which env/credential variable holds the key. |
+| `apiKeyEnv` | `NEWAPI_API_KEY` | Which env/credential variable holds the key. Letters, digits and `_`, not starting with a digit; an extra gateway with an invalid name is skipped with a warning (the others still load). |
 | `label` | `NewAPI` | Route label shown in the picker. |
 | `flavor` | `newapi` | Template label only (`newapi` / `litellm` / `higress` / `openai-compatible` / `custom`). |
 | `gateways` | — | Array of extra gateways: `{ id, baseURL, apiKeyEnv, label, … }`, each becoming a `gateway:<id>` route. The id is lower-cased and other characters become `-` (`My GW` → `gateway:my-gw`); a later entry whose id lands on an already-used route is skipped with a warning. |
