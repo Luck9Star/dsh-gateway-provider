@@ -38,7 +38,8 @@
     "test:timeouts": "node test/timeouts.mjs",
     "test:gateway-config": "node test/gateway-config.mjs",
     "test:discovery": "node test/discovery.mjs",
-    "test:reasoning": "node test/reasoning.mjs"
+    "test:reasoning": "node test/reasoning.mjs",
+    "test:pi-catalog": "node test/pi-catalog.mjs"
   },
   "keywords": [
     "deepseek-harness",
@@ -72,7 +73,7 @@
     }
   },
   "dependencies": {
-    "@earendil-works/pi-ai": "0.84.4"
+    "@earendil-works/pi-ai": "1.5.2"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
