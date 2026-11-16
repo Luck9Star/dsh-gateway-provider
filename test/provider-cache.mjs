@@ -209,7 +209,9 @@ try {
   assert.equal(otherPosts[0].url.split("?")[0], "/v1/chat/completions", "the unaffected gateway must not be forced onto Gemini");
   assert.equal(otherPosts[0].model, OTHER_MODEL);
   const catalogGetsOther = requests.filter((entry) => entry.method === "GET" && entry.url.split("?")[0] === "/v1/models");
-  assert.equal(catalogGetsOther.length, 1, "a second gateway sharing the discovery base should reuse the catalog cache");
+  // Issue #12: catalogs are cached per gateway route + credential, so a
+  // second gateway on the same discovery base fetches its own list once.
+  assert.equal(catalogGetsOther.length, 2, "a second gateway on the same discovery base gets its own catalog fetch (issue #12)");
 
   // --- in-flight OpenAI request keeps its already-resolved provider ---
   // Flip the primary back to OpenAI, warm that provider, then hold the next
