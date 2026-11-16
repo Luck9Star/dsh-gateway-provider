@@ -110,6 +110,7 @@ dsh plugin --profile dsh-tui add dsh-gateway-provider
 | `openaiURL` / `responsesURL` / `anthropicURL` / `geminiURL` | — | 仅完全自定义网关：按协议分别填端点 URL；不填 = 该协议关闭。`geminiURL` 可填裸主机名、`…/v1beta` 或 `…/v1beta/models` —— `/v1beta` 段会自动确保（pi-ai 要求它含在 base 里）。 |
 | `maxTokens` / `defaultContextWindow` | `32768` / `128000` | models.dev 无数据时的兜底。 |
 | `streamIdleTimeoutMs` | `600000` | 流式空闲超时。 |
+| `catalogTimeoutMs` | `15000` | 单次拉模型列表 / models.dev 请求的超时上限；网关卡住时报 `TIMEOUT`，不会让模型选择器或聊天请求一直挂着。 |
 | `headers` | — | 发往网关的额外 HTTP 头。 |
 
 ## 常见问题

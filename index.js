@@ -34,7 +34,7 @@ import { credentialRef } from "@deepseek-ai/dsh-credentials";
 import { launchEnvironmentOf } from "@deepseek-ai/dsh-launch-environment";
 import { MAX_TIMER_DELAY_MS } from "@deepseek-ai/dsh-timeout";
 import { NewapiAdapter } from "./lib/adapter.js";
-import { DEFAULT_EXCLUDE_PATTERNS, DEFAULT_MAX_TOKENS, DEFAULT_CONTEXT_WINDOW } from "./lib/catalog.js";
+import { DEFAULT_CATALOG_TIMEOUT_MS, DEFAULT_EXCLUDE_PATTERNS, DEFAULT_MAX_TOKENS, DEFAULT_CONTEXT_WINDOW } from "./lib/catalog.js";
 import { DEFAULT_ENDPOINT_PRIORITY, deriveProtocolURLs } from "./lib/protocols.js";
 
 export const name = "llm-newapi";
@@ -172,6 +172,8 @@ export const Config = z.object({
   catalogMode: z.union(["auto", "v1", "management"]).default("auto"),
   /** Model-list cache freshness window. */
   catalogTtlMs: z.number().step(1).min(1_000).default(DEFAULT_CATALOG_TTL_MS),
+  /** Hard cap on one model-list / models.dev request (a stalled gateway must not hang requests). */
+  catalogTimeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS).default(DEFAULT_CATALOG_TIMEOUT_MS),
   /** Exclude non-chat model families from the picker. */
   includeChatOnly: z.boolean().default(true),
   /** Regex patterns excluding models from the picker. */
@@ -230,6 +232,7 @@ function gatewayConnection(gw, defaults, provider, label) {
     sortModelsByRelease: defaults.sortModelsByRelease,
     catalogMode: gw.catalogMode ?? defaults.catalogMode,
     catalogTtlMs: defaults.catalogTtlMs,
+    catalogTimeoutMs: defaults.catalogTimeoutMs,
     includeChatOnly: defaults.includeChatOnly,
     excludePatterns: defaults.excludePatterns,
     endpointPriority: gw.endpointPriority ?? defaults.endpointPriority,
@@ -281,6 +284,7 @@ export function resolveGateways(config, environment) {
     sortModelsByRelease: config.sortModelsByRelease ?? true,
     catalogMode: config.catalogMode ?? "auto",
     catalogTtlMs: config.catalogTtlMs ?? DEFAULT_CATALOG_TTL_MS,
+    catalogTimeoutMs: config.catalogTimeoutMs ?? DEFAULT_CATALOG_TIMEOUT_MS,
     includeChatOnly: config.includeChatOnly ?? true,
     excludePatterns: config.excludePatterns ?? DEFAULT_EXCLUDE_PATTERNS,
     endpointPriority: config.endpointPriority ?? DEFAULT_ENDPOINT_PRIORITY,

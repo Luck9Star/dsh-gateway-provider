@@ -34,7 +34,8 @@
     "test:schema": "node test/schema-coercion.mjs",
     "test:errors": "node test/error-codes.mjs",
     "test:provider-cache": "node test/provider-cache.mjs",
-    "test:catalog-cache": "node test/catalog-cache.mjs"
+    "test:catalog-cache": "node test/catalog-cache.mjs",
+    "test:timeouts": "node test/timeouts.mjs"
   },
   "keywords": [
     "deepseek-harness",

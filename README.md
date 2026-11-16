@@ -151,6 +151,7 @@ the first start where the plugin loads. The frequently used ones:
 | `openaiURL` / `responsesURL` / `anthropicURL` / `geminiURL` | — | Fully-custom gateways only: per-protocol endpoint URLs; unset = that protocol off. `geminiURL` may be a bare host, `…/v1beta`, or `…/v1beta/models` — the `/v1beta` segment is ensured (pi-ai expects it in the base). |
 | `maxTokens` / `defaultContextWindow` | `32768` / `128000` | Fallbacks when models.dev has no data. |
 | `streamIdleTimeoutMs` | `600000` | Idle timeout while streaming. |
+| `catalogTimeoutMs` | `15000` | Cap on one model-list / models.dev request; a stalled gateway fails with `TIMEOUT` instead of hanging the picker or a chat request. |
 | `headers` | — | Extra HTTP headers sent to the gateway. |
 
 ## Troubleshooting
