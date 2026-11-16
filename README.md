@@ -138,10 +138,10 @@ the first start where the plugin loads. The frequently used ones:
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `baseURL` | `https://api.newapi.ai` | Your gateway's base URL. Env fallbacks: `NEWAPI_BASE_URL`, `NEWAPI_API_URL`. A trailing `/v1` or `/v1beta` is tolerated (stripped for discovery); Gemini requests always go to `{base}/v1beta/models/…`. |
-| `apiKeyEnv` | `NEWAPI_API_KEY` | Which env/credential variable holds the key. |
+| `apiKeyEnv` | `NEWAPI_API_KEY` | Which env/credential variable holds the key. Letters, digits and `_`, not starting with a digit; an extra gateway with an invalid name is skipped with a warning (the others still load). |
 | `label` | `NewAPI` | Route label shown in the picker. |
 | `flavor` | `newapi` | Template label only (`newapi` / `litellm` / `higress` / `openai-compatible` / `custom`). |
-| `gateways` | — | Array of extra gateways: `{ id, baseURL, apiKeyEnv, label, … }`, each becoming a `gateway:<id>` route. |
+| `gateways` | — | Array of extra gateways: `{ id, baseURL, apiKeyEnv, label, … }`, each becoming a `gateway:<id>` route. The id is lower-cased and other characters become `-` (`My GW` → `gateway:my-gw`); a later entry whose id lands on an already-used route is skipped with a warning. |
 | `models` | — | Per-model overrides: `{ id, name, disabled, protocol, contextWindow, maxTokens, reasoningLevels }`. |
 | `useModelsDev` / `modelsUrl` | `true` / models.dev | Parameter enrichment source (supports `file:` URLs for offline). |
 | `excludePatterns` | image/speech/… | Regex list of model ids to keep out of the picker (matched case-insensitively). |
@@ -151,7 +151,24 @@ the first start where the plugin loads. The frequently used ones:
 | `openaiURL` / `responsesURL` / `anthropicURL` / `geminiURL` | — | Fully-custom gateways only: per-protocol endpoint URLs; unset = that protocol off. `geminiURL` may be a bare host, `…/v1beta`, or `…/v1beta/models` — the `/v1beta` segment is ensured (pi-ai expects it in the base). |
 | `maxTokens` / `defaultContextWindow` | `32768` / `128000` | Fallbacks when models.dev has no data. |
 | `streamIdleTimeoutMs` | `600000` | Idle timeout while streaming. |
-| `headers` | — | Extra HTTP headers sent to the gateway. |
+| `catalogTimeoutMs` | `15000` | Cap on one model-list / models.dev request; a stalled gateway fails with `TIMEOUT` instead of hanging the picker or a chat request. |
+| `headers` | — | Extra HTTP headers for the **default** gateway only. Each entry in `gateways` takes its own `headers`; root headers are not inherited (see below). |
+
+**Upgrading: `headers` and extra gateways.** Up to 1.1.5, root `headers` were
+also sent to every entry in `gateways`. They now stay on the default gateway,
+so a header meant for one host (often an auth token) no longer reaches
+another. If an extra gateway relied on the inherited headers, copy them onto
+that gateway:
+
+```yaml
+- id: llm-newapi
+  config:
+    headers: { X-Team: alpha }          # default gateway only
+    gateways:
+      - id: backup
+        baseURL: https://backup.example.com
+        headers: { X-Team: alpha }      # now explicit per gateway
+```
 
 ## Troubleshooting
 

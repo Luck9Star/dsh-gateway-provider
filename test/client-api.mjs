@@ -40,6 +40,8 @@ const SNAPSHOT = {
 		{ id: "shared-url", baseURL: "https://gw.example.com", models: [] },
 		// Inherits the default ref; its key write is made to fail (write order).
 		{ id: "fail-edit", baseURL: "https://f.example.com", models: [] },
+		// Hand-edited YAML id: the host routes it as gateway:mixed-case.
+		{ id: "Mixed Case", baseURL: "https://m.example.com", models: [] },
 	],
 };
 const api = {
@@ -243,6 +245,39 @@ if (!card) {
 		expect(editResult?.ok === false && addResult?.ok === false, "a failed key write must report the save as failed");
 		const laterGatewayWrites = calls.settings.slice(settingsBefore).filter((a) => a.length === 3 && a[1].some((op) => op.path[0] === "gateways"));
 		expect(laterGatewayWrites.length === 0, `no gateways write may follow a failed key write (got ${laterGatewayWrites.length})`);
+	}
+
+	// (g) the client addresses a gateway by the same route the host registers
+	// (index.js routeIdOf), and its duplicate check uses that route too.
+	const mixedCard = propsList.find((p) => p && p.gateway?.id === "Mixed Case" && typeof p.onTest === "function");
+	if (!mixedCard) {
+		problems.push("Mixed Case gateway card not reachable in the render tree");
+	} else {
+		expect(mixedCard.route === "gateway:mixed-case", `card route must match the host route gateway:mixed-case, got ${mixedCard.route}`);
+		const before = calls.llm.length;
+		await mixedCard.onTest();
+		await new Promise((r) => setTimeout(r, 20));
+		const asked = calls.llm.slice(before).map((a) => a[1]?.provider);
+		expect(asked.length === 1 && asked[0] === "gateway:mixed-case", `test-connection must ask the host route gateway:mixed-case, got ${asked}`);
+		const addCard2 = propsList.find((p) => p && typeof p.onAdd === "function" && p.existingIds !== undefined);
+		expect(addCard2.existingIds.indexOf("mixed-case") !== -1, "existingIds must hold sanitized ids so a colliding add is refused");
+		const dup = await addCard2.onAdd({ id: "mixed-case", baseURL: "https://dup.example.com" });
+		expect(dup?.ok === false, "adding an id that collides after sanitizing must be refused");
+	}
+
+	// (h) an invalid key variable name is refused before anything is written
+	// (the host would reject the ref and skip the gateway).
+	{
+		const card = propsList.find((p) => p && p.gateway?.id === "shared-url" && typeof p.onSaveConfig === "function");
+		const add = propsList.find((p) => p && typeof p.onAdd === "function" && p.existingIds !== undefined);
+		const settingsBefore = calls.settings.length;
+		const credsBefore = calls.credentials.length;
+		const edit = await card.onSaveConfig({ apiKeyEnv: "MY-KEY", apiKey: "sk-test-bad-env" });
+		const added = await add.onAdd({ id: "bad-env", baseURL: "https://be.example.com", apiKeyEnv: "9KEY", apiKey: "sk-test-bad-env" });
+		await new Promise((r) => setTimeout(r, 20));
+		expect(edit?.ok === false && added?.ok === false, "an invalid apiKeyEnv must be refused");
+		expect(calls.settings.length === settingsBefore && calls.credentials.length === credsBefore,
+			`an invalid apiKeyEnv must write nothing (settings +${calls.settings.length - settingsBefore}, credentials +${calls.credentials.length - credsBefore})`);
 	}
 
 	// (e) derived names never collide with refs already in use.

@@ -27,3 +27,7 @@ jobs:
       - run: npm run test:errors
       - run: npm run test:provider-cache
       - run: npm run test:catalog-cache
+      - run: npm run test:timeouts
+      - run: npm run test:gateway-config
+      - run: npm run test:discovery
+      - run: npm run test:reasoning

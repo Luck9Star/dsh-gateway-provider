@@ -97,10 +97,10 @@ dsh plugin --profile dsh-tui add dsh-gateway-provider
 | 键 | 默认值 | 含义 |
 | --- | --- | --- |
 | `baseURL` | `https://api.newapi.ai` | 网关 base URL。环境变量兜底：`NEWAPI_BASE_URL`、`NEWAPI_API_URL`。结尾带 `/v1` 或 `/v1beta` 均可（发现时会剥掉）；Gemini 请求固定发往 `{base}/v1beta/models/…`。 |
-| `apiKeyEnv` | `NEWAPI_API_KEY` | key 存在哪个环境/凭据变量里。 |
+| `apiKeyEnv` | `NEWAPI_API_KEY` | key 存在哪个环境/凭据变量里。只能用字母、数字和 `_`，且不能以数字开头；额外网关的名字不合法时，只跳过这一个网关并打警告日志，其他网关照常加载。 |
 | `label` | `NewAPI` | 选择器里显示的路由名。 |
 | `flavor` | `newapi` | 仅作模板标签（`newapi` / `litellm` / `higress` / `openai-compatible` / `custom`）。 |
-| `gateways` | — | 额外网关数组：`{ id, baseURL, apiKeyEnv, label, … }`，每个成为一条 `gateway:<id>` 路由。 |
+| `gateways` | — | 额外网关数组：`{ id, baseURL, apiKeyEnv, label, … }`，每个成为一条 `gateway:<id>` 路由。id 会转小写、其他字符换成 `-`（`My GW` → `gateway:my-gw`）；规整后撞名的后一条会被跳过并打警告日志。 |
 | `models` | — | 按模型覆盖：`{ id, name, disabled, protocol, contextWindow, maxTokens, reasoningLevels }`。 |
 | `useModelsDev` / `modelsUrl` | `true` / models.dev | 参数增补来源（支持 `file:` URL 离线用）。 |
 | `excludePatterns` | 图像/语音/…… | 要从选择器排除的模型 id 正则列表（不区分大小写）。 |
@@ -110,7 +110,22 @@ dsh plugin --profile dsh-tui add dsh-gateway-provider
 | `openaiURL` / `responsesURL` / `anthropicURL` / `geminiURL` | — | 仅完全自定义网关：按协议分别填端点 URL；不填 = 该协议关闭。`geminiURL` 可填裸主机名、`…/v1beta` 或 `…/v1beta/models` —— `/v1beta` 段会自动确保（pi-ai 要求它含在 base 里）。 |
 | `maxTokens` / `defaultContextWindow` | `32768` / `128000` | models.dev 无数据时的兜底。 |
 | `streamIdleTimeoutMs` | `600000` | 流式空闲超时。 |
-| `headers` | — | 发往网关的额外 HTTP 头。 |
+| `catalogTimeoutMs` | `15000` | 单次拉模型列表 / models.dev 请求的超时上限；网关卡住时报 `TIMEOUT`，不会让模型选择器或聊天请求一直挂着。 |
+| `headers` | — | 只发给**默认**网关的额外 HTTP 头。`gateways` 里的每个网关用自己的 `headers`，不再继承根级的（见下）。 |
+
+**升级说明：`headers` 与额外网关。** 1.1.5 及以前，根级 `headers` 也会发给
+`gateways` 里的每个网关。现在它只发给默认网关，避免给某个网关的头（常见是鉴权
+token）被带到别的主机。如果某个额外网关依赖继承来的头，把它们抄到那个网关下：
+
+```yaml
+- id: llm-newapi
+  config:
+    headers: { X-Team: alpha }          # 只给默认网关
+    gateways:
+      - id: backup
+        baseURL: https://backup.example.com
+        headers: { X-Team: alpha }      # 现在按网关单独写
+```
 
 ## 常见问题
 

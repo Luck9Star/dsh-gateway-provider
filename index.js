@@ -34,7 +34,7 @@ import { credentialRef } from "@deepseek-ai/dsh-credentials";
 import { launchEnvironmentOf } from "@deepseek-ai/dsh-launch-environment";
 import { MAX_TIMER_DELAY_MS } from "@deepseek-ai/dsh-timeout";
 import { NewapiAdapter } from "./lib/adapter.js";
-import { DEFAULT_EXCLUDE_PATTERNS, DEFAULT_MAX_TOKENS, DEFAULT_CONTEXT_WINDOW } from "./lib/catalog.js";
+import { DEFAULT_CATALOG_TIMEOUT_MS, DEFAULT_EXCLUDE_PATTERNS, DEFAULT_MAX_TOKENS, DEFAULT_CONTEXT_WINDOW } from "./lib/catalog.js";
 import { DEFAULT_ENDPOINT_PRIORITY, deriveProtocolURLs } from "./lib/protocols.js";
 
 export const name = "llm-newapi";
@@ -140,6 +140,12 @@ const GatewaySchema = z.object({
   models: z.array(ModelOverrideSchema),
   /** Wire-format preference order for this gateway. */
   endpointPriority: z.array(coercedString()),
+  /**
+   * Extra HTTP headers for this gateway's provider requests (name → value).
+   * Root-level `headers` belong to the default gateway only and are never
+   * inherited here.
+   */
+  headers: z.dict(coercedString()),
 });
 
 export const Config = z.object({
@@ -172,6 +178,8 @@ export const Config = z.object({
   catalogMode: z.union(["auto", "v1", "management"]).default("auto"),
   /** Model-list cache freshness window. */
   catalogTtlMs: z.number().step(1).min(1_000).default(DEFAULT_CATALOG_TTL_MS),
+  /** Hard cap on one model-list / models.dev request (a stalled gateway must not hang requests). */
+  catalogTimeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS).default(DEFAULT_CATALOG_TIMEOUT_MS),
   /** Exclude non-chat model families from the picker. */
   includeChatOnly: z.boolean().default(true),
   /** Regex patterns excluding models from the picker. */
@@ -182,7 +190,8 @@ export const Config = z.object({
   userId: coercedString().default("1"),
   /**
    * Extra HTTP headers sent with every provider request to the default
-   * gateway (name → value). Reserved attribution headers (user-agent) are
+   * gateway only (name → value); additional gateways set their own
+   * `gateways[].headers`. Reserved attribution headers (user-agent) are
    * filtered out at request time; per-request values are unaffected.
    */
   headers: z.dict(coercedString()),
@@ -230,12 +239,15 @@ function gatewayConnection(gw, defaults, provider, label) {
     sortModelsByRelease: defaults.sortModelsByRelease,
     catalogMode: gw.catalogMode ?? defaults.catalogMode,
     catalogTtlMs: defaults.catalogTtlMs,
+    catalogTimeoutMs: defaults.catalogTimeoutMs,
     includeChatOnly: defaults.includeChatOnly,
     excludePatterns: defaults.excludePatterns,
     endpointPriority: gw.endpointPriority ?? defaults.endpointPriority,
     userId: gw.userId ?? defaults.userId,
     modelOverrides: indexModelOverrides(gw.models ?? []),
-    headers: defaults.headers,
+    // Never inherited: a header meant for one gateway (often a credential)
+    // must not travel to another host.
+    headers: gw.headers,
     maxTokens: defaults.maxTokens,
     defaultContextWindow: defaults.defaultContextWindow,
     streamIdleTimeoutMs: defaults.streamIdleTimeoutMs,
@@ -254,13 +266,21 @@ function indexModelOverrides(models) {
   return map;
 }
 
+/** Compare-key for a gateway address: no trailing slash or version segment, case-insensitive. */
+function endpointOf(url) {
+  return String(url ?? "").trim().replace(/\/+$/, "").replace(/\/v\d+(?:beta)?$/i, "").toLowerCase();
+}
+
 /** Sanitize a gateway id into a stable provider-route suffix. */
 function routeIdOf(id) {
   return String(id ?? "").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-/** Build the gateway list and provider-route map from the resolved config. */
-export function resolveGateways(config, environment) {
+/**
+ * Build the gateway list and provider-route map from the resolved config.
+ * @param warn - receives one message per gateway entry skipped as unusable.
+ */
+export function resolveGateways(config, environment, warn = () => {}) {
   const rootProto = deriveProtocolURLs(config);
   const explicitBase = config.baseURL
     ?? environment?.get(DEFAULT_BASE_URL_ENV)?.value
@@ -281,11 +301,11 @@ export function resolveGateways(config, environment) {
     sortModelsByRelease: config.sortModelsByRelease ?? true,
     catalogMode: config.catalogMode ?? "auto",
     catalogTtlMs: config.catalogTtlMs ?? DEFAULT_CATALOG_TTL_MS,
+    catalogTimeoutMs: config.catalogTimeoutMs ?? DEFAULT_CATALOG_TIMEOUT_MS,
     includeChatOnly: config.includeChatOnly ?? true,
     excludePatterns: config.excludePatterns ?? DEFAULT_EXCLUDE_PATTERNS,
     endpointPriority: config.endpointPriority ?? DEFAULT_ENDPOINT_PRIORITY,
     userId: config.userId ?? "1",
-    headers: config.headers,
     maxTokens: config.maxTokens ?? DEFAULT_MAX_TOKENS,
     defaultContextWindow: config.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW,
     streamIdleTimeoutMs: config.streamIdleTimeoutMs ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS,
@@ -301,22 +321,36 @@ export function resolveGateways(config, environment) {
       responsesURL: config.responsesURL,
       anthropicURL: config.anthropicURL,
       geminiURL: config.geminiURL,
+      headers: config.headers,
     }, defaults, PROVIDER, defaultLabel) },
   ];
-  // Additional gateways from the array.
+  // Additional gateways from the array. Ids are sanitized into route
+  // suffixes, so two distinct ids ("My GW", "my-gw") can land on one route;
+  // the later entry is skipped (a duplicate route would fail registration
+  // and take every gateway, the default one included, down with it).
+  const seen = new Set();
   for (const gw of config.gateways ?? []) {
     const id = routeIdOf(gw.id);
     if (id.length === 0) continue;
+    if (seen.has(id)) {
+      warn(`llm-newapi: skipping gateway "${gw.id}": its route ${GATEWAY_PREFIX}${id} is already used by another gateway`);
+      continue;
+    }
     const hasBase = typeof gw.baseURL === "string" && gw.baseURL.length > 0;
     if (!hasBase && deriveProtocolURLs(gw) === undefined) continue;
     const provider = `${GATEWAY_PREFIX}${id}`;
     const label = gw.label ?? provider;
-    gateways.push({
-      provider,
-      id,
-      label,
-      connection: gatewayConnection(gw, defaults, provider, label),
-    });
+    // One misconfigured gateway (say, an invalid apiKeyEnv name) is skipped
+    // with a warning instead of failing the plugin for every gateway.
+    let connection;
+    try {
+      connection = gatewayConnection(gw, defaults, provider, label);
+    } catch (error) {
+      warn(`llm-newapi: skipping gateway "${gw.id}": ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+    seen.add(id);
+    gateways.push({ provider, id, label, connection });
   }
   return gateways;
 }
@@ -335,7 +369,7 @@ export function apply(ctx, config) {
     const raw = current();
     if (raw === lastRaw && resolved !== null) return resolved;
     try {
-      const next = resolveGateways(raw, launchEnvironmentOf(ctx));
+      const next = resolveGateways(raw, launchEnvironmentOf(ctx), (message) => ctx.logger.warn(message));
       lastRaw = raw;
       resolved = next;
       return next;
@@ -411,11 +445,13 @@ export function apply(ctx, config) {
   ensureRegistration();
 
   /** Expose model discovery so the web UI can fetch a gateway's model list. */
-  ctx.llm.registerModelDiscovery(settingsNs, async (request) => {
-    const env = launchEnvironmentOf(ctx);
+  // dsh calls discover(request, signal): the cancellation is the second
+  // argument. Failures are thrown (not an empty list) so the settings page
+  // can show why Test / Sync found nothing.
+  ctx.llm.registerModelDiscovery(settingsNs, async (request, signal) => {
     const gateways = resolve();
     const gw = request.provider !== undefined ? gateways.find((g) => g.provider === request.provider) : gateways[0];
-    if (gw === undefined) return [];
+    if (gw === undefined) throw new LlmError(`llm-newapi: no gateway route "${request.provider}" to discover models for`, "INVALID_DISCOVERY");
     // An explicit baseURL override (the settings UI's test/fetch path) wins
     // for discovery; empty strings count as absent.
     const reqBase = typeof request.baseURL === "string" && request.baseURL.length > 0
@@ -424,12 +460,18 @@ export function apply(ctx, config) {
     const connection = reqBase !== undefined
       ? { ...gw.connection, baseURL: reqBase, catalogBase: reqBase }
       : gw.connection;
-    const apiKey = request.apiKey ?? await resolveApiKey(gw.connection).catch(() => undefined);
+    // The stored key belongs to the stored address. A draft that points
+    // discovery somewhere else must bring its own key; never send the saved
+    // one to an address the user has not saved for this gateway.
+    const storedBase = gw.connection.catalogBase ?? gw.connection.baseURL;
+    const sameEndpoint = reqBase === undefined || endpointOf(reqBase) === endpointOf(storedBase);
+    const apiKey = request.apiKey ?? (sameEndpoint ? await resolveApiKey(gw.connection).catch(() => undefined) : undefined);
     const { discoverGatewayModels } = await import("./lib/catalog.js");
     try {
-      return await discoverGatewayModels(connection, apiKey, request.signal);
-    } catch {
-      return [];
+      return await discoverGatewayModels(connection, apiKey, signal);
+    } catch (error) {
+      if (error instanceof LlmError) throw error;
+      throw new LlmError(`llm-newapi: model discovery for ${gw.provider} failed`, "DISCOVERY_FAILED", { cause: error });
     }
   });
 
