@@ -40,7 +40,8 @@
     "test:gateway-config": "node test/gateway-config.mjs",
     "test:discovery": "node test/discovery.mjs",
     "test:reasoning": "node test/reasoning.mjs",
-    "test:settings-path": "node test/settings-path.mjs"
+    "test:settings-path": "node test/settings-path.mjs",
+    "test:store-compat": "node test/store-compat.mjs"
   },
   "keywords": [
     "deepseek-harness",

@@ -307,6 +307,24 @@ if (!card) {
 		expect(fresh?.ok === true, "after the reload the next write must go through");
 	}
 
+	// (j) issue #20: the "don't send store" toggle writes compat.supportsStore
+	// (root `compat` for the default gateway, the entry's `compat` otherwise).
+	{
+		const lastOps = () => calls.settings.filter((a) => a.length === 3).at(-1)?.[1] ?? [];
+		const def = propsList.find((p) => p && p.gateway?.id === "default" && typeof p.onSaveConfig === "function");
+		const off = await def.onSaveConfig({ noStore: "1" });
+		await new Promise((r) => setTimeout(r, 20));
+		const rootOp = lastOps().find((op) => op.path[0] === "compat");
+		expect(off?.ok === true && rootOp?.op === "set" && rootOp.value?.supportsStore === false,
+			`default-gateway toggle must set compat.supportsStore false, got ${JSON.stringify(rootOp)}`);
+		const card = propsList.find((p) => p && p.gateway?.id === "backup" && typeof p.onSaveConfig === "function");
+		const on = await card.onSaveConfig({ noStore: "0" });
+		await new Promise((r) => setTimeout(r, 20));
+		const entry = lastOps().find((op) => op.path[0] === "gateways")?.value.find((g) => g.id === "backup");
+		expect(on?.ok === true && entry?.compat?.supportsStore === true,
+			`gateway toggle must set its compat.supportsStore true, got ${JSON.stringify(entry?.compat)}`);
+	}
+
 	// (e) derived names never collide with refs already in use.
 	const derive = moduleExports.perGatewayKeyEnv;
 	expect(derive("a-b", []) === "NEWAPI_API_KEY_A_B", "derived ref upper-cases and replaces '-'");
