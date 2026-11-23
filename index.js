@@ -83,6 +83,15 @@ const coercedString = () => z.union([
   z.transform(z.number(), (value) => String(value)),
 ]);
 
+/**
+ * pi-ai request-compat overrides (a subset of pi-ai's `model.compat`).
+ * Merged field by field over pi-ai's built-in compat: pi-ai < gateway < model.
+ */
+const CompatSchema = z.object({
+  /** Send OpenAI's `store` field on chat-completions (false = omit it; issue #20). */
+  supportsStore: z.boolean(),
+});
+
 /** Schema for one model-level override on a gateway (all fields optional). */
 const ModelOverrideSchema = z.object({
   /** Model id exactly as the gateway accepts it. */
@@ -99,6 +108,8 @@ const ModelOverrideSchema = z.object({
   maxTokens: z.number().step(1).min(1),
   /** Reasoning level set (e.g. ["off","low","medium","high"]). */
   reasoningLevels: z.array(coercedString()),
+  /** Request-compat overrides for this model (beat the gateway's). */
+  compat: CompatSchema,
 });
 
 /** Gateway-type templates the settings UI offers (informational labels). */
@@ -146,6 +157,8 @@ const GatewaySchema = z.object({
    * inherited here.
    */
   headers: z.dict(coercedString()),
+  /** Request-compat overrides for every model on this gateway. */
+  compat: CompatSchema,
 });
 
 export const Config = z.object({
@@ -195,6 +208,8 @@ export const Config = z.object({
    * filtered out at request time; per-request values are unaffected.
    */
   headers: z.dict(coercedString()),
+  /** Request-compat overrides for every model on the default gateway. */
+  compat: CompatSchema,
   /** Fallback output-token cap for models without models.dev data. */
   maxTokens: z.number().step(1).min(1).default(DEFAULT_MAX_TOKENS),
   /** Fallback context window for models without models.dev data. */
@@ -248,11 +263,22 @@ function gatewayConnection(gw, defaults, provider, label) {
     // Never inherited: a header meant for one gateway (often a credential)
     // must not travel to another host.
     headers: gw.headers,
+    compat: gatewayCompat(gw.compat, flavor),
     maxTokens: defaults.maxTokens,
     defaultContextWindow: defaults.defaultContextWindow,
     streamIdleTimeoutMs: defaults.streamIdleTimeoutMs,
     retryPolicy: defaults.retryPolicy,
   };
+}
+
+/**
+ * A gateway's compat overrides. LiteLLM proxies often front non-OpenAI
+ * upstreams (Anthropic rejects `store`, issue #20), so that template omits
+ * `store` unless the user turns it back on. Never inherited across gateways.
+ */
+function gatewayCompat(compat, flavor) {
+  if (flavor !== "litellm") return compat;
+  return { supportsStore: false, ...compat };
 }
 
 /** Index a model-override array into an id → override map (disabled excluded). */
@@ -322,6 +348,7 @@ export function resolveGateways(config, environment, warn = () => {}) {
       anthropicURL: config.anthropicURL,
       geminiURL: config.geminiURL,
       headers: config.headers,
+      compat: config.compat,
     }, defaults, PROVIDER, defaultLabel) },
   ];
   // Additional gateways from the array. Ids are sanitized into route

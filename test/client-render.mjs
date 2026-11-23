@@ -120,10 +120,25 @@ for (const language of ["zh-CN", "en-US"]) {
 	const has = (s) => texts.some((t) => t.includes(s));
 	const mustHave = language.startsWith("zh")
 		? ["网关模型管理", "默认网关", "gateway:backup", "gateway:edge", "思考级别", "已隐藏", "自定义", "API Key 变量名", "留空则继承默认网关",
-			"完全自定义", "OpenAI 兼容地址", "/chat/completions 结尾", "/v1/messages 结尾", "anthropic"]
+			"完全自定义", "OpenAI 兼容地址", "/chat/completions 结尾", "/v1/messages 结尾", "anthropic", "不发送 store 参数"]
 		: ["Gateway Model Management", "Default gateway", "gateway:backup", "gateway:edge", "Reasoning levels", "hidden", "Custom", "API Key env var", "inherits the default gateway",
-			"Fully custom", "OpenAI-compatible URL", "/chat/completions", "/v1/messages", "anthropic"];
+			"Fully custom", "OpenAI-compatible URL", "/chat/completions", "/v1/messages", "anthropic", "Don't send the store parameter"];
 	for (const s of mustHave) if (!has(s)) problems.push("missing expected text: " + s);
+
+	// Issue #20: one "don't send store" checkbox per gateway config form;
+	// unset follows the type (default newapi → off, backup litellm → on,
+	// edge custom → off).
+	const boxes = [];
+	const findBoxes = (node) => {
+		if (node === null || node === undefined) return;
+		if (Array.isArray(node)) return node.forEach(findBoxes);
+		if (typeof node !== "object") return;
+		if (typeof node.type === "function") return findBoxes(node.type(node.props));
+		if (node.type === "input" && node.props?.type === "checkbox") boxes.push(node.props.checked);
+		(node.children || []).forEach(findBoxes);
+	};
+	findBoxes(captured.renderer({ api }));
+	if (JSON.stringify(boxes) !== JSON.stringify([false, true, false])) problems.push("store checkboxes (default, backup litellm, edge) should be [false,true,false], got " + JSON.stringify(boxes));
 
 	if (problems.length > 0) {
 		failed = true;

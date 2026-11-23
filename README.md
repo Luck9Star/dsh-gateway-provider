@@ -140,9 +140,10 @@ the first start where the plugin loads. The frequently used ones:
 | `baseURL` | `https://api.newapi.ai` | Your gateway's base URL. Env fallbacks: `NEWAPI_BASE_URL`, `NEWAPI_API_URL`. A trailing `/v1` or `/v1beta` is tolerated (stripped for discovery); Gemini requests always go to `{base}/v1beta/models/…`. |
 | `apiKeyEnv` | `NEWAPI_API_KEY` | Which env/credential variable holds the key. Letters, digits and `_`, not starting with a digit; an extra gateway with an invalid name is skipped with a warning (the others still load). |
 | `label` | `NewAPI` | Route label shown in the picker. |
-| `flavor` | `newapi` | Template label only (`newapi` / `litellm` / `higress` / `openai-compatible` / `custom`). |
+| `flavor` | `newapi` | Template label (`newapi` / `litellm` / `higress` / `openai-compatible` / `custom`). `litellm` also defaults `compat.supportsStore` to `false` (see below). |
 | `gateways` | — | Array of extra gateways: `{ id, baseURL, apiKeyEnv, label, … }`, each becoming a `gateway:<id>` route. The id is lower-cased and other characters become `-` (`My GW` → `gateway:my-gw`); a later entry whose id lands on an already-used route is skipped with a warning. |
-| `models` | — | Per-model overrides: `{ id, name, disabled, protocol, contextWindow, maxTokens, reasoningLevels }`. |
+| `models` | — | Per-model overrides: `{ id, name, disabled, protocol, contextWindow, maxTokens, reasoningLevels, compat }`. |
+| `compat` | — | Request-compat overrides for pi-ai, on the root (default gateway), on each `gateways[]` entry, and on each `models[]` override. Currently `{ supportsStore }`: `false` stops sending OpenAI's `store` field. |
 | `useModelsDev` / `modelsUrl` | `true` / models.dev | Parameter enrichment source (supports `file:` URLs for offline). |
 | `excludePatterns` | image/speech/… | Regex list of model ids to keep out of the picker (matched case-insensitively). |
 | `sortModelsByRelease` | `true` | Newest models first. |
@@ -170,6 +171,33 @@ that gateway:
         headers: { X-Team: alpha }      # now explicit per gateway
 ```
 
+**`compat` and the `store` parameter.** On OpenAI chat-completions requests
+pi-ai sends `"store": false` unless its compat says the host doesn't support
+it; for a host it doesn't recognize (any self-hosted gateway) it assumes it
+does. LiteLLM forwarding to Anthropic (Claude) rejects that field with a 502
+(`anthropic does not support parameters: ['store']`). Turn it off with
+**Don't send the store parameter** in the gateway's config on Settings →
+Gateway Models, or in YAML:
+
+```yaml
+- id: llm-newapi
+  config:
+    compat: { supportsStore: false }    # default gateway
+    gateways:
+      - id: lite
+        baseURL: http://localhost:4000
+        flavor: litellm                 # store already off by default
+        models:
+          - id: gpt-5.2
+            compat: { supportsStore: true }   # send it again for this model
+```
+
+Gateways with `flavor: litellm` omit `store` unless you set
+`compat.supportsStore: true`. Compat merges field by field: pi-ai's built-in
+compat for a known model, then the gateway's `compat`, then the model's — a
+later layer only replaces the fields it sets. (The Responses API protocol
+always sends `store: false`; this setting covers chat-completions.)
+
 ## Troubleshooting
 
 | Symptom | Cause → fix |
@@ -177,6 +205,7 @@ that gateway:
 | Picker route exists but zero models | The plugin can't read your model list. Check the gateway base URL; try `catalogMode: "management"` for newapi gateways that restrict `/v1/models`. |
 | `401` / auth errors on every request | Key missing or wrong: check the badge in Settings → Gateway Models, or `NEWAPI_API_KEY` in `~/.dsh/.credentials.yaml`. |
 | A model's context window looks wrong | models.dev had no match. Edit the model on the settings page (or a `models:` override). |
+| `502 … does not support parameters: ['store']` (LiteLLM → Claude) | The gateway rejects OpenAI's `store` field. Tick **Don't send the store parameter** on the gateway (or set `compat: { supportsStore: false }`); `flavor: litellm` gateways have it on by default. |
 | Wrong format answers / tool calls flaky for one model | That model is routed over a protocol it handles poorly. Pin `protocol` on the model (`openai`, `openai-response`, `anthropic`, `gemini`). |
 | Custom gateway with separate endpoints | Use `flavor: "custom"` and set `openaiURL` / `responsesURL` / `anthropicURL` / `geminiURL` explicitly. |
 | Gemini model returns HTML / `Unexpected token '<'` (issue #4) | The gateway serves Gemini under `/v1beta`; fixed in 1.1.2 — a plain `baseURL` now sends Gemini to `{base}/v1beta/models/…` (a `baseURL` ending in `/v1beta` also works). No older-version workaround exists; update the plugin. |

@@ -37,4 +37,5 @@ jobs:
       - run: npm run test:discovery
       - run: npm run test:reasoning
       - run: npm run test:settings-path
+      - run: npm run test:store-compat
       - run: npm publish

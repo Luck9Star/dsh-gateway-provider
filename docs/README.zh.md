@@ -99,9 +99,10 @@ dsh plugin --profile dsh-tui add dsh-gateway-provider
 | `baseURL` | `https://api.newapi.ai` | 网关 base URL。环境变量兜底：`NEWAPI_BASE_URL`、`NEWAPI_API_URL`。结尾带 `/v1` 或 `/v1beta` 均可（发现时会剥掉）；Gemini 请求固定发往 `{base}/v1beta/models/…`。 |
 | `apiKeyEnv` | `NEWAPI_API_KEY` | key 存在哪个环境/凭据变量里。只能用字母、数字和 `_`，且不能以数字开头；额外网关的名字不合法时，只跳过这一个网关并打警告日志，其他网关照常加载。 |
 | `label` | `NewAPI` | 选择器里显示的路由名。 |
-| `flavor` | `newapi` | 仅作模板标签（`newapi` / `litellm` / `higress` / `openai-compatible` / `custom`）。 |
+| `flavor` | `newapi` | 模板标签（`newapi` / `litellm` / `higress` / `openai-compatible` / `custom`）。`litellm` 还会把 `compat.supportsStore` 默认设为 `false`（见下）。 |
 | `gateways` | — | 额外网关数组：`{ id, baseURL, apiKeyEnv, label, … }`，每个成为一条 `gateway:<id>` 路由。id 会转小写、其他字符换成 `-`（`My GW` → `gateway:my-gw`）；规整后撞名的后一条会被跳过并打警告日志。 |
-| `models` | — | 按模型覆盖：`{ id, name, disabled, protocol, contextWindow, maxTokens, reasoningLevels }`。 |
+| `models` | — | 按模型覆盖：`{ id, name, disabled, protocol, contextWindow, maxTokens, reasoningLevels, compat }`。 |
+| `compat` | — | 传给 pi-ai 的请求兼容设置，可写在根级（默认网关）、`gateways[]` 每一项、`models[]` 每个覆盖里。目前支持 `{ supportsStore }`：`false` 表示不发送 OpenAI 的 `store` 字段。 |
 | `useModelsDev` / `modelsUrl` | `true` / models.dev | 参数增补来源（支持 `file:` URL 离线用）。 |
 | `excludePatterns` | 图像/语音/…… | 要从选择器排除的模型 id 正则列表（不区分大小写）。 |
 | `sortModelsByRelease` | `true` | 最新模型排前面。 |
@@ -127,11 +128,36 @@ token）被带到别的主机。如果某个额外网关依赖继承来的头，
         headers: { X-Team: alpha }      # 现在按网关单独写
 ```
 
+**`compat` 与 `store` 参数。** 走 OpenAI chat-completions 协议时，pi-ai 默认会带上
+`"store": false`，除非它的 compat 说这个主机不支持；对它不认识的主机（任何自建网关）
+它都当作支持。LiteLLM 把请求转给 Anthropic（Claude）时不认这个字段，报 502
+（`anthropic does not support parameters: ['store']`）。在 Settings → Gateway Models
+的网关配置里勾选 **不发送 store 参数**，或在 YAML 里写：
+
+```yaml
+- id: llm-newapi
+  config:
+    compat: { supportsStore: false }    # 默认网关
+    gateways:
+      - id: lite
+        baseURL: http://localhost:4000
+        flavor: litellm                 # 默认就不发 store
+        models:
+          - id: gpt-5.2
+            compat: { supportsStore: true }   # 这个模型重新发送
+```
+
+`flavor: litellm` 的网关默认不发 `store`，设 `compat.supportsStore: true` 可改回来。
+compat 按字段逐个合并：先是 pi-ai 对已知模型的内置 compat，再是网关的 `compat`，
+最后是模型的 `compat`——后一层只覆盖它自己写了的字段。（Responses API 协议总会带
+`store: false`，这个设置只管 chat-completions。）
+
 ## 常见问题
 
 | 症状 | 原因 → 处理 |
 | --- | --- |
 | 路由有了但模型为零 | 插件读不到模型列表。检查网关 base URL；newapi 网关若限制 `/v1/models`，试试 `catalogMode: "management"`。 |
+| `502 … does not support parameters: ['store']`（LiteLLM → Claude） | 网关不认 OpenAI 的 `store` 字段。在该网关勾选 **不发送 store 参数**（或设 `compat: { supportsStore: false }`）；`flavor: litellm` 的网关默认已勾选。 |
 | 每次请求都 `401` / 鉴权错误 | key 缺失或不对：看 Settings → Gateway Models 的徽标，或 `~/.dsh/.credentials.yaml` 里的 `NEWAPI_API_KEY`。 |
 | 某模型的上下文窗口看着不对 | models.dev 没匹配上。在设置页编辑该模型（或写 `models:` 覆盖）。 |
 | 单个模型工具调用不稳、格式怪 | 该模型被路由到了它处理不好的协议。在模型上钉死 `protocol`（`openai`、`openai-response`、`anthropic`、`gemini`）。 |
