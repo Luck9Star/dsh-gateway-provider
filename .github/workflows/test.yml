@@ -34,3 +34,4 @@ jobs:
       - run: npm run test:reasoning
       - run: npm run test:settings-path
       - run: npm run test:store-compat
+      - run: npm run test:tui-settings

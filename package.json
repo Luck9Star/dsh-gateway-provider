@@ -41,7 +41,8 @@
     "test:discovery": "node test/discovery.mjs",
     "test:reasoning": "node test/reasoning.mjs",
     "test:settings-path": "node test/settings-path.mjs",
-    "test:store-compat": "node test/store-compat.mjs"
+    "test:store-compat": "node test/store-compat.mjs",
+    "test:tui-settings": "node test/tui-settings.mjs"
   },
   "keywords": [
     "deepseek-harness",

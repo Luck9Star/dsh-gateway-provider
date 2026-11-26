@@ -102,11 +102,27 @@ dsh plugin --profile dsh-tui add dsh-gateway-provider
 ```
 
 After a restart the gateway models should appear in the TUI model picker.
-Connection Test / Sync / per-model editing still need the web settings page
-(or hand-edits of the YAML above). A future in-terminal settings surface
-(`tuiSettingsSections`, see [#5](https://github.com/Luck9Star/dsh-gateway-provider/issues/5))
-may cover the scalar fields; until then the YAML override is the supported
-path.
+
+With [dsh-tui](https://github.com/ccch1mneyyy/dsh-TUI) 0.16.1 or newer, the
+plugin also registers a **Gateway Models** section on the TUI settings
+screen (the `tuiSettingsSections` seam; see
+[#5](https://github.com/Luck9Star/dsh-gateway-provider/issues/5)). It
+edits the same settings namespace as the web page, via the TUI's own
+revision-fenced `settings.mutate` writes. You can change the default
+gateway's label, base URL, type, `apiKeyEnv`, catalog source, catalog
+timeout, `store` behaviour, and per-protocol URLs, plus the same scalars
+on each *existing* extra gateway. The API key field is write-only: the
+stored value is never shown, and a blank draft leaves the current key
+alone. A gateway that still inherits the default key has no key field
+(set its `apiKeyEnv` first, otherwise a typed key would overwrite the
+default credential). Empty text/number drafts clear the override and
+re-inherit the default.
+
+An older TUI, or a headless / web profile with no `tuiSettingsSections`
+service, is unchanged — the plugin does not crash, and the YAML override
+above remains the supported path. Adding or removing gateways, Test /
+Sync, and per-model editing still need the web settings page, a YAML
+edit, or a future `/gateway` command (P2 of #5).
 
 ## Daily use
 

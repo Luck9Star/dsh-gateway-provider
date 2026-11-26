@@ -36,6 +36,7 @@ import { MAX_TIMER_DELAY_MS } from "@deepseek-ai/dsh-timeout";
 import { NewapiAdapter } from "./lib/adapter.js";
 import { DEFAULT_CATALOG_TIMEOUT_MS, DEFAULT_EXCLUDE_PATTERNS, DEFAULT_MAX_TOKENS, DEFAULT_CONTEXT_WINDOW } from "./lib/catalog.js";
 import { DEFAULT_ENDPOINT_PRIORITY, deriveProtocolURLs } from "./lib/protocols.js";
+import { bindTuiSettings } from "./lib/tui-settings.js";
 
 export const name = "llm-newapi";
 export const inject = ["llm"];
@@ -514,9 +515,14 @@ export function apply(ctx, config) {
   // re-resolve and re-register then. resolve() holds the last good snapshot
   // when an update arrives invalid, so the catch only guards registration
   // races (e.g. a provider-route conflict on a mid-flight update).
+  // TUI settings sections (issue #5 P1): no-op when the composition has no
+  // tuiSettingsSections service. Refresh on the same volatile-update tick as
+  // the provider directory so secret.ref and extra-gateway groups stay current.
+  const tuiSettings = bindTuiSettings(ctx, { ns: settingsNs, getConfig: current });
   ctx.on("loader/volatile-update", () => {
     try {
       ensureRegistration();
+      tuiSettings.refresh();
     } catch (error) {
       ctx.logger.error("llm-newapi: keeping the last good configuration after a settings update");
       ctx.logger.error(error);

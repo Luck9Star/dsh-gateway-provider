@@ -76,11 +76,23 @@ echo "GW_API_KEY: sk-REPLACE_WITH_YOUR_KEY" >> ~/.dsh/.credentials.yaml
 dsh plugin --profile dsh-tui add dsh-gateway-provider
 ```
 
-重启后，网关模型会出现在 TUI 的模型选择器里。连接测试 / 同步 /
-按模型编辑仍需要 web 设置页（或手工改上面的 YAML）。之后可能会加终端内
-设置面（`tuiSettingsSections`，见
-[#5](https://github.com/Luck9Star/dsh-gateway-provider/issues/5)）覆盖标量
-字段；在那之前，YAML 覆盖就是受支持的用法。
+重启后，网关模型会出现在 TUI 的模型选择器里。
+
+使用 [dsh-tui](https://github.com/ccch1mneyyy/dsh-TUI) 0.16.1 或更新版本时，
+插件还会在 TUI 的设置页注册一个「网关模型」分段（`tuiSettingsSections`
+缝，见 [#5](https://github.com/Luck9Star/dsh-gateway-provider/issues/5)）。
+它改的是和 web 设置页同一份设置，由 TUI 自己做带修订号的
+`settings.mutate` 写入。可以改默认网关的名称、基础地址、类型、
+`apiKeyEnv`、模型列表来源、拉列表超时、`store` 行为，以及各协议地址；
+已经存在的额外网关也能改同样的标量字段。API Key 输入框是只写的：不会
+显示已保存的值，留空则保持现有 Key。仍然沿用默认 Key 的额外网关不会出
+现 Key 输入框（请先填它自己的 `apiKeyEnv`，否则会把默认网关的凭据盖掉）。
+文本 / 数字留空表示清除覆盖、改回默认值。
+
+更旧的 TUI，或没有 `tuiSettingsSections` 服务的 headless / web profile，
+行为不变——插件不会因此崩溃，上面的 YAML 覆盖仍是受支持的用法。增删网关、
+连接测试 / 同步、按模型编辑，仍需要 web 设置页、改 YAML，或以后的
+`/gateway` 命令（#5 的 P2）。
 
 ## 日常使用
 
