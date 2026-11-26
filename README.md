@@ -110,8 +110,10 @@ screen (the `tuiSettingsSections` seam; see
 edits the same settings namespace as the web page, via the TUI's own
 revision-fenced `settings.mutate` writes. You can change the default
 gateway's label, base URL, type, `apiKeyEnv`, catalog source, catalog
-timeout, `store` behaviour, and per-protocol URLs, plus the same scalars
-on each *existing* extra gateway. The API key field is write-only: the
+timeout, and per-protocol URLs, plus the same scalars
+on each *existing* extra gateway. The store setting is a three-way
+select — inherit (follow the gateway type; off for LiteLLM), don't
+send, or send — not a boolean. The API key field is write-only: the
 stored value is never shown, and a blank draft leaves the current key
 alone. A gateway that still inherits the default key has no key field
 (set its `apiKeyEnv` first, otherwise a typed key would overwrite the

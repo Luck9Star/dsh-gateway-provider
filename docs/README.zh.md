@@ -83,8 +83,9 @@ dsh plugin --profile dsh-tui add dsh-gateway-provider
 缝，见 [#5](https://github.com/Luck9Star/dsh-gateway-provider/issues/5)）。
 它改的是和 web 设置页同一份设置，由 TUI 自己做带修订号的
 `settings.mutate` 写入。可以改默认网关的名称、基础地址、类型、
-`apiKeyEnv`、模型列表来源、拉列表超时、`store` 行为，以及各协议地址；
-已经存在的额外网关也能改同样的标量字段。API Key 输入框是只写的：不会
+`apiKeyEnv`、模型列表来源、拉列表超时，以及各协议地址；
+已经存在的额外网关也能改同样的标量字段。store 设置是三选一：跟随默认
+（按网关类型，LiteLLM 默认不发送）、不发送、或发送，不是布尔开关。API Key 输入框是只写的：不会
 显示已保存的值，留空则保持现有 Key。仍然沿用默认 Key 的额外网关不会出
 现 Key 输入框（请先填它自己的 `apiKeyEnv`，否则会把默认网关的凭据盖掉）。
 文本 / 数字留空表示清除覆盖、改回默认值。
