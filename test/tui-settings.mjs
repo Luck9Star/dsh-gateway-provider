@@ -147,56 +147,86 @@ function fieldMap(section) {
   console.log("[PASS] extra gateways: index paths, inherit-no-secret, secret follows own apiKeyEnv");
 }
 
-// ---- bind is a no-op without the seam ---------------------------------
-{
-  const binding = bindTuiSettings({
-    get: () => undefined,
-    logger: { error() {} },
-  }, { ns: NS, getConfig: () => ({}) });
-  binding.refresh();
-  binding.dispose();
-  console.log("[PASS] bindTuiSettings is a no-op when the service is missing");
-}
-
-// ---- apply() without the seam (same host shape as the other suites) ----
-{
-  apply({
+// ---- binding: a cordis-like context -----------------------------------
+// cordis throws on `ctx.<service>` a plugin does not inject; `ctx.get` is the
+// optional lookup. Reading the property on this stand-in throws the same way.
+function fakeContext() {
+  const runtime = { host: undefined, listeners: {} };
+  const ctx = new Proxy({
     fiber: { entry: { options: { id: "llm-newapi" } } },
-    get: () => undefined,
     llm: {
       registerConfigurableProviders: () => ({ replace() {} }),
       registerAdapter: () => ({ replace() {} }),
       registerModelDiscovery() {},
     },
-    on() {},
+    get: (name) => (name === "tuiSettingsSections" ? runtime.host : undefined),
+    on: (name, fn) => { (runtime.listeners[name] ??= []).push(fn); },
     logger: { error() {}, warn() {} },
-  }, { get: () => ({ baseURL: "https://gw.example.com" }) });
-  console.log("[PASS] apply() without tuiSettingsSections does not throw");
+  }, {
+    get(target, prop) {
+      if (prop === "tuiSettingsSections") {
+        throw new Error(`cannot get property "${prop}" without inject`);
+      }
+      return target[prop];
+    },
+  });
+  return {
+    ctx,
+    provide: (host) => { runtime.host = host; },
+    emit: (name, ...args) => { for (const fn of runtime.listeners[name] ?? []) fn(...args); },
+  };
+}
+
+/** A host whose registrations land in `sections`. */
+function fakeHost(sections) {
+  return {
+    register(section) {
+      sections.push(section);
+      return () => { section._disposed = true; };
+    },
+  };
+}
+
+// ---- no host: neither bind nor apply() throws or registers -----------
+{
+  const errors = [];
+  const { ctx } = fakeContext();
+  ctx.logger.error = (error) => errors.push(error);
+  const binding = bindTuiSettings(ctx, { ns: NS, getConfig: () => ({}) });
+  binding.refresh();
+  binding.dispose();
+  apply(ctx, { get: () => ({ baseURL: "https://gw.example.com" }) });
+  assert.deepEqual(errors, []);
+  console.log("[PASS] no host: bindTuiSettings and apply() are no-ops, no direct service read");
+}
+
+// ---- the host arrives after apply(), and again when its row reloads ----
+{
+  const first = [];
+  const second = [];
+  const { ctx, provide, emit } = fakeContext();
+  apply(ctx, { get: () => ({ baseURL: "https://gw.example.com" }) });
+
+  provide(fakeHost(first));
+  emit("internal/service", "tuiSettingsSections");
+  assert.equal(first.length, 1, "the section registers when the host arrives");
+  assert.equal(first[0].ns, NS);
+
+  // A reloaded service row starts with an empty registry.
+  provide(fakeHost(second));
+  emit("internal/service", "tuiSettingsSections");
+  assert.equal(first[0]._disposed, true, "the old registration is released");
+  assert.equal(second.length, 1, "the section registers again with the new host");
+  console.log("[PASS] a host that arrives or reloads after apply() gets the section");
 }
 
 // ---- apply() registers, and a settings update re-registers ------------
 {
   const registered = [];
-  const service = {
-    register(section) {
-      registered.push(section);
-      return () => { section._disposed = true; };
-    },
-  };
+  const { ctx, provide, emit } = fakeContext();
+  provide(fakeHost(registered));
   let settings = { baseURL: "https://gw.example.com", apiKeyEnv: "OLD_KEY" };
-  const listeners = {};
-  apply({
-    fiber: { entry: { options: { id: "llm-newapi" } } },
-    tuiSettingsSections: service,
-    get: (name) => (name === "tuiSettingsSections" ? service : undefined),
-    llm: {
-      registerConfigurableProviders: () => ({ replace() {} }),
-      registerAdapter: () => ({ replace() {} }),
-      registerModelDiscovery() {},
-    },
-    on: (name, fn) => { listeners[name] = fn; },
-    logger: { error() {}, warn() {} },
-  }, { get: () => settings });
+  apply(ctx, { get: () => settings });
 
   assert.equal(registered.length, 1, "the section is registered on apply");
   assert.equal(registered[0].ns, NS);
@@ -208,15 +238,16 @@ function fieldMap(section) {
     apiKeyEnv: "NEW_KEY",
     gateways: [{ id: "lite", baseURL: "http://localhost:4000", apiKeyEnv: "LITE_KEY" }],
   };
-  listeners["loader/volatile-update"]();
+  emit("loader/volatile-update");
   assert.equal(registered[0]._disposed, true, "the previous section is disposed");
   assert.equal(registered.length, 2, "a new section is registered after the update");
   const next = fieldMap(registered[1]);
   assert.equal(next.get("apiKey").secret.ref, "NEW_KEY");
   assert.equal(next.get("gateways.0.apiKey").secret.ref, "LITE_KEY");
 
-  // An identical snapshot must not dispose-and-register again.
-  listeners["loader/volatile-update"]();
+  // An identical snapshot — or another service changing — must not register again.
+  emit("loader/volatile-update");
+  emit("internal/service", "llm");
   assert.equal(registered.length, 2, "unchanged settings do not re-register");
   console.log("[PASS] apply() registers and re-registers when apiKeyEnv / gateways change");
 }
