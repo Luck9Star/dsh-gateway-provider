@@ -41,7 +41,8 @@
     "test:discovery": "node test/discovery.mjs",
     "test:reasoning": "node test/reasoning.mjs",
     "test:settings-path": "node test/settings-path.mjs",
-    "test:store-compat": "node test/store-compat.mjs"
+    "test:store-compat": "node test/store-compat.mjs",
+    "test:tui-settings": "node test/tui-settings.mjs"
   },
   "keywords": [
     "deepseek-harness",
@@ -75,7 +76,7 @@
     }
   },
   "dependencies": {
-    "@earendil-works/pi-ai": "1.5.2"
+    "@earendil-works/pi-ai": "1.6.1"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",

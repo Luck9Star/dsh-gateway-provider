@@ -76,11 +76,24 @@ echo "GW_API_KEY: sk-REPLACE_WITH_YOUR_KEY" >> ~/.dsh/.credentials.yaml
 dsh plugin --profile dsh-tui add dsh-gateway-provider
 ```
 
-重启后，网关模型会出现在 TUI 的模型选择器里。连接测试 / 同步 /
-按模型编辑仍需要 web 设置页（或手工改上面的 YAML）。之后可能会加终端内
-设置面（`tuiSettingsSections`，见
-[#5](https://github.com/Luck9Star/dsh-gateway-provider/issues/5)）覆盖标量
-字段；在那之前，YAML 覆盖就是受支持的用法。
+重启后，网关模型会出现在 TUI 的模型选择器里。
+
+使用 [dsh-tui](https://github.com/ccch1mneyyy/dsh-TUI) 0.16.1 或更新版本时，
+插件还会在 TUI 的设置页注册一个「网关模型」分段（`tuiSettingsSections`
+缝，见 [#5](https://github.com/Luck9Star/dsh-gateway-provider/issues/5)）。
+它改的是和 web 设置页同一份设置，由 TUI 自己做带修订号的
+`settings.mutate` 写入。可以改默认网关的名称、基础地址、类型、
+`apiKeyEnv`、模型列表来源、拉列表超时，以及各协议地址；
+已经存在的额外网关也能改同样的标量字段。store 设置是三选一：跟随默认
+（按网关类型，LiteLLM 默认不发送）、不发送、或发送，不是布尔开关。API Key 输入框是只写的：不会
+显示已保存的值，留空则保持现有 Key。仍然沿用默认 Key 的额外网关不会出
+现 Key 输入框（请先填它自己的 `apiKeyEnv`，否则会把默认网关的凭据盖掉）。
+文本 / 数字留空表示清除覆盖、改回默认值。
+
+更旧的 TUI，或没有 `tuiSettingsSections` 服务的 headless / web profile，
+行为不变——插件不会因此崩溃，上面的 YAML 覆盖仍是受支持的用法。增删网关、
+连接测试 / 同步、按模型编辑，仍需要 web 设置页、改 YAML，或以后的
+`/gateway` 命令（#5 的 P2）。
 
 ## 日常使用
 
@@ -183,7 +196,7 @@ pnpm run smoke             # 真实网关往返（需要真 key）
 
 ### 为什么插件自带 pi-ai
 
-`@earendil-works/pi-ai` 是精确锁定的直接依赖，与 harness 自带的那份 pi-ai 互相独立。锁定的版本跟随 harness 自己用的大版本（dsh 0.2.2 依赖 pi-ai `^1.3.0`，插件锁 1.5.2），升级时手动调整，确保模型目录认识 harness 自带的模型（例如它的默认模型 `deepseek-flash`）。这样做的好处是：网关模型目录（思考档位、各家 compat，如智谱 GLM 的 `supportsDeveloperRole: false`）不再随 harness 升级被动漂移——harness 旧目录里缺的模型不会再退化请求编码。插件与 harness 的边界只传纯数据（`GenerateOptions` 进、dsh `StreamChunk` 出，`lib/pi-bridge.js` 从不把 pi-ai 对象泄漏到边界外），因此插件副本与 harness 自带副本可在同一进程内安全共存。
+`@earendil-works/pi-ai` 是精确锁定的直接依赖，与 harness 自带的那份 pi-ai 互相独立。锁定的版本跟随 harness 自己用的大版本（dsh 0.2.2 依赖 pi-ai `^1.3.0`，插件锁 1.6.1），升级时手动调整，确保模型目录认识 harness 自带的模型（例如它的默认模型 `deepseek-flash`）。这样做的好处是：网关模型目录（思考档位、各家 compat，如智谱 GLM 的 `supportsDeveloperRole: false`）不再随 harness 升级被动漂移——harness 旧目录里缺的模型不会再退化请求编码。插件与 harness 的边界只传纯数据（`GenerateOptions` 进、dsh `StreamChunk` 出，`lib/pi-bridge.js` 从不把 pi-ai 对象泄漏到边界外），因此插件副本与 harness 自带副本可在同一进程内安全共存。
 
 从本地检出开发：把 profile 的 `package.json` 指向
 `"dsh-gateway-provider": "link:/绝对/路径"`，然后在 profile 里重跑 `pnpm install`。**不要**再往 profile 自己的 `cordis.patch.yml` 里加 `id: llm-newapi` 行 —— bundle patch 已提供（重复行 = 加载器报错）。
