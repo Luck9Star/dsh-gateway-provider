@@ -196,7 +196,7 @@ pnpm run smoke             # 真实网关往返（需要真 key）
 
 ### 为什么插件自带 pi-ai
 
-`@earendil-works/pi-ai` 是精确锁定的直接依赖，与 harness 自带的那份 pi-ai 互相独立。锁定的版本跟随 harness 自己用的大版本（dsh 0.2.2 依赖 pi-ai `^1.3.0`，插件锁 1.5.2），升级时手动调整，确保模型目录认识 harness 自带的模型（例如它的默认模型 `deepseek-flash`）。这样做的好处是：网关模型目录（思考档位、各家 compat，如智谱 GLM 的 `supportsDeveloperRole: false`）不再随 harness 升级被动漂移——harness 旧目录里缺的模型不会再退化请求编码。插件与 harness 的边界只传纯数据（`GenerateOptions` 进、dsh `StreamChunk` 出，`lib/pi-bridge.js` 从不把 pi-ai 对象泄漏到边界外），因此插件副本与 harness 自带副本可在同一进程内安全共存。
+`@earendil-works/pi-ai` 是精确锁定的直接依赖，与 harness 自带的那份 pi-ai 互相独立。锁定的版本跟随 harness 自己用的大版本（dsh 0.2.2 依赖 pi-ai `^1.3.0`，插件锁 1.6.1），升级时手动调整，确保模型目录认识 harness 自带的模型（例如它的默认模型 `deepseek-flash`）。这样做的好处是：网关模型目录（思考档位、各家 compat，如智谱 GLM 的 `supportsDeveloperRole: false`）不再随 harness 升级被动漂移——harness 旧目录里缺的模型不会再退化请求编码。插件与 harness 的边界只传纯数据（`GenerateOptions` 进、dsh `StreamChunk` 出，`lib/pi-bridge.js` 从不把 pi-ai 对象泄漏到边界外），因此插件副本与 harness 自带副本可在同一进程内安全共存。
 
 从本地检出开发：把 profile 的 `package.json` 指向
 `"dsh-gateway-provider": "link:/绝对/路径"`，然后在 profile 里重跑 `pnpm install`。**不要**再往 profile 自己的 `cordis.patch.yml` 里加 `id: llm-newapi` 行 —— bundle patch 已提供（重复行 = 加载器报错）。
